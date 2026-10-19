@@ -125,11 +125,17 @@ export function Field({ label, hint, className, children }) {
 export const inputClass =
   'w-full min-w-0 rounded-[14px] border border-line bg-surface px-3.5 text-base font-medium text-ink outline-none placeholder:text-muted focus:border-accent'
 
-export function TextField({ label, hint, className, inputClassName, multiline, ...rest }) {
+// multiline: a text area that starts at `rows` lines and grows as you type (CSS field-sizing)
+export function TextField({ label, hint, className, inputClassName, multiline, rows = 3, ...rest }) {
   const Tag = multiline ? 'textarea' : 'input'
   return (
     <Field label={label} hint={hint} className={className}>
-      <Tag className={cx(inputClass, multiline ? 'min-h-24 resize-y py-3' : 'h-12', inputClassName)} {...rest} />
+      <Tag
+        className={cx(inputClass, multiline ? 'resize-none py-3 leading-relaxed [field-sizing:content]' : 'h-12', inputClassName)}
+        style={multiline ? { minHeight: `calc(${rows} * 1.625em + 1.5rem + 2px)` } : undefined}
+        rows={multiline ? rows : undefined}
+        {...rest}
+      />
     </Field>
   )
 }

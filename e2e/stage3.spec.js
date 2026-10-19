@@ -38,6 +38,11 @@ test('morning check-in with sleep pays once, edits pay nothing', async ({ page }
   await page.getByRole('spinbutton', { name: /^REM/ }).fill('22')
   await expect(page.getByRole('spinbutton', { name: /^Light/ })).toHaveValue('60') // auto-filled
   await page.getByLabel('Intention 1').fill('Finish the draft')
+  const log = page.getByRole('textbox', { name: 'Morning log' })
+  await expect(log).toHaveAttribute('placeholder', "How do I feel, what's on my mind…")
+  const small = (await log.boundingBox()).height
+  await log.fill('Slept well.\nA bit nervous about the review.\nWant a calm, focused morning.\nGym later.\nCall mum.')
+  expect((await log.boundingBox()).height).toBeGreaterThan(small) // grows as I type
   await page.getByRole('button', { name: /Save · \+2 stars/ }).click()
   await expect(page.getByRole('status').filter({ hasText: '+2 stars' })).toBeVisible()
   expect(await balance(page)).toBe(before + 2)
@@ -45,9 +50,14 @@ test('morning check-in with sleep pays once, edits pay nothing', async ({ page }
   // Edit: no new stars
   await page.goto('/checkin/morning')
   await expect(page.getByText('editing')).toBeVisible()
+  await expect(page.getByRole('textbox', { name: 'Morning log' })).toHaveValue(/A bit nervous about the review/)
   await page.getByRole('button', { name: 'Mood 8 of 10' }).click()
   await page.getByRole('button', { name: 'Save changes' }).click()
   expect(await balance(page)).toBe(before + 2)
+
+  // The Journal shows the log
+  await page.goto('/journal')
+  await expect(page.getByText('Morning log:')).toBeVisible()
 
   // Today shows last night's sleep score
   await page.getByRole('link', { name: 'Today' }).last().click()

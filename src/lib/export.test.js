@@ -14,7 +14,7 @@ const input = {
   ],
   checkins: [
     { type: 'morning', date: '2026-10-20', mood: 7, energy: 6, intentions: ['Draft', '', ''], sleep: { fellAsleep: '23:10', wokeUp: '06:55', actualMinutes: 465, cycles: 5, deepPct: 18, remPct: 22, lightPct: 60, quality: 8, deviceScore: 86 } },
-    { type: 'evening', date: '2026-10-20', mood: 9, energy: 6, dayRating: 8, wentWell: 'Draft done' },
+    { type: 'evening', date: '2026-10-20', mood: 9, energy: 6, dayRating: 8, wentWell: 'Draft done', note: 'Calm evening, a bit tired.' },
   ],
   meditations: [{ date: '2026-10-20', slot: 'morning', plannedMin: 10, status: 'done' }],
   starEvents: [
@@ -43,6 +43,13 @@ describe('export JSON', () => {
     const n = exp.data.sleepNights[0]
     expect(n.score).toBeGreaterThan(0)
     expect(Object.keys(n.scoreParts)).toEqual(['duration', 'stages', 'quality'])
+  })
+
+  it('the Morning / Evening log is exported as "log" and explained in the brief', () => {
+    expect(exp.data.checkins.find((x) => x.type === 'evening').log).toBe('Calm evening, a bit tired.')
+    expect(JSON.stringify(exp.analysisBrief)).toContain('Morning log')
+    expect(csvFor(exp, 'checkins').split('\r\n')[0]).toContain(',log,')
+    expect(csvFor(exp, 'checkins')).toContain('Calm evening, a bit tired.')
   })
 
   it('summary numbers', () => {

@@ -43,6 +43,7 @@ export function JournalPage() {
 }
 
 function Entry({ title, entry, line, onClick }) {
+  const log = entry?.note?.trim()
   return (
     <button
       type="button"
@@ -51,6 +52,11 @@ function Entry({ title, entry, line, onClick }) {
     >
       <span className="text-sm font-bold">{title}</span>
       <span className="text-[13px] text-muted">{entry ? line || 'Saved' : 'Not filled in · add'}</span>
+      {log && (
+        <span className="line-clamp-2 text-[13px]">
+          <span className="font-semibold">{title} log:</span> {log}
+        </span>
+      )}
     </button>
   )
 }

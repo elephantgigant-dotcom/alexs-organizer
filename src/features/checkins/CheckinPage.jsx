@@ -118,7 +118,16 @@ export function CheckinPage() {
         </>
       )}
 
-      <TextField label="Anything else" multiline value={f.note} onChange={(e) => set({ note: e.target.value })} />
+      <TextField
+        label={morning ? 'Morning log' : 'Evening log'}
+        hint="Optional"
+        multiline
+        rows={4}
+        maxLength={2000}
+        placeholder="How do I feel, what's on my mind…"
+        value={f.note}
+        onChange={(e) => set({ note: e.target.value })}
+      />
 
       <Button size="lg" onClick={save} disabled={busy}>
         {existing ? 'Save changes' : `Save · +${values.checkin} stars`}
