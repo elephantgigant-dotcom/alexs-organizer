@@ -3,7 +3,7 @@
 /* Design tokens. Light is the default; dark comes from the system or Settings.
    Use them in classes like bg-bg, bg-surface, text-ink, text-accent… */
 @theme {
-  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-sans: 'Figtree', system-ui, sans-serif;
 
   --color-bg: var(--bg);
   --color-surface: var(--surface);
