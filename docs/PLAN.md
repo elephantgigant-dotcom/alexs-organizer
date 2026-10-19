@@ -30,13 +30,12 @@ users/{uid}                     profile + settings
     sleep: { targetMin: 450, deepRange: [13, 23], remRange: [20, 25] },  // for the sleep score
     pin: { hash, salt, iterations, length } | null,          // PBKDF2 (Web Crypto)
     autoLockMin: 5,
-    notifications: {
-      taskDue: true, morningCheckin: true, eveningCheckin: true, meditation: true, weeklyReview: true,
-      morningCheckinTime: '07:30', eveningCheckinTime: '21:30',
-      morningMeditationTime: '07:45', eveningMeditationTime: '21:45',
-      weeklyReviewTime: '19:00',                              // Sundays
-      taskLeadMin: 15,                                        // minutes before a task's time
-      quietHours: { enabled: true, start: '22:30', end: '07:00' },
+    notifications: {                                           // src/lib/reminders.js
+      morningCheckin: { on, time: '07:30' }, eveningCheckin: { on, time: '21:30' },
+      morningMeditation: { on, time: '07:45' }, eveningMeditation: { on, time: '21:45' },
+      weeklyReview: { on, time: '19:00' },                      // Sundays
+      taskDue: { on, leadMin: 15 }, meditationEnd: { on },
+      quietHours: { on, start: '23:00', end: '07:00' },         // sleep hours: nothing is sent
     },
   }
 
@@ -70,6 +69,8 @@ users/{uid}/goals/{id}          title, target (stars earned), period 'week'|'mon
                                 from?, to?  (progress = stars earned in that period)
 
 users/{uid}/devices/{id}        push token per device (Pixel, desktop)
+users/{uid}/reminderLog/{date}_{type}   server only: one decision per reminder per day
+                                (sent / switched off / quiet hours / already done / no device …)
 users/{uid}/pushTests/{id}      "send me a test notification"
 users/{uid}/weeklySummaries/{weekMonday}   written by the server only: the weekly backup
                                 (Cloud Function weeklyBackup, Monday 00:30 Warsaw, functions/summary.js)

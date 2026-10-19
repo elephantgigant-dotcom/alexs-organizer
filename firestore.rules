@@ -77,7 +77,8 @@ service cloud.firestore {
         && isDateKey(d.date)
         && d.plannedMin is int && d.plannedMin >= 5 && d.plannedMin <= 30
         && d.status in ['running', 'paused', 'done', 'cancelled']
-        && d.endsAt is int;
+        && d.endsAt is int
+        && (!('notifiedEnd' in d) || d.notifiedEnd is bool);
     }
 
     function validReward(d) {
@@ -129,8 +130,9 @@ service cloud.firestore {
       // categories, devices, pushTests …
       match /{collection}/{docId} {
         allow read: if isOwner(uid);
-        // Weekly backups are written only by the server; checked collections have their own rules above
-        allow write: if isOwner(uid) && !(collection in ['weeklySummaries', 'checkins', 'tasks', 'starEvents', 'meditations', 'rewards', 'goals']);
+        // Weekly backups and the reminder log are written only by the server;
+        // checked collections have their own rules above
+        allow write: if isOwner(uid) && !(collection in ['weeklySummaries', 'reminderLog', 'checkins', 'tasks', 'starEvents', 'meditations', 'rewards', 'goals']);
       }
     }
 

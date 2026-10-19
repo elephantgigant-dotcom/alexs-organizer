@@ -12,6 +12,7 @@ import { MeditatePage } from './features/meditation/MeditatePage.jsx'
 import { MeditationPrompt } from './features/meditation/MeditationPrompt.jsx'
 import { ValuesPage } from './features/settings/ValuesPage.jsx'
 import { ExportPage } from './features/settings/ExportPage.jsx'
+import { NotificationsPage } from './features/settings/NotificationsPage.jsx'
 import { WeeklyReviewPage } from './features/stats/WeeklyReviewPage.jsx'
 import { PIN_RESET_KEY, PinGate } from './features/pin/PinGate.jsx'
 import { CategoriesPage } from './features/settings/CategoriesPage.jsx'
@@ -67,6 +68,7 @@ function Gate() {
               <Route path="more/values" element={<ValuesPage />} />
               <Route path="journal" element={<JournalPage />} />
               <Route path="more/export" element={<ExportPage />} />
+              <Route path="more/notifications" element={<NotificationsPage />} />
               <Route path="stats/review" element={<WeeklyReviewPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>

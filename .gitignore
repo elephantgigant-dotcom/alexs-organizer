@@ -9,3 +9,4 @@ ui-debug.log
 test-results
 test-results
 playwright-report
+dist-e2e

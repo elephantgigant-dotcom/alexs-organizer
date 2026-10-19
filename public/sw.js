@@ -1,9 +1,12 @@
 // Service worker: makes the app installable and lets it open without internet.
-// - App files (/assets/…) are cached the first time they load.
+// - App files (/assets/…, icons) are cached the first time they load.
+// - The font (Google Fonts) is cached too, so offline screens look the same.
 // - Pages: try the internet first, fall back to the saved copy when offline.
-// The data itself works offline thanks to Firestore's own cache.
+// The data itself works offline thanks to Firestore's own cache on the device.
+// It also shows push notifications (reminders) sent by our Cloud Functions.
 
-const CACHE = 'alexs-organizer-v1'
+const CACHE = 'alexs-organizer-v2'
+const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icons/icon-192.png'])))
@@ -20,7 +23,25 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request
   const url = new URL(req.url)
-  if (req.method !== 'GET' || url.origin !== self.location.origin) return
+  if (req.method !== 'GET') return
+
+  // Font files: cache first (they never change)
+  if (FONT_HOSTS.includes(url.hostname)) {
+    event.respondWith(
+      caches.match(req).then(
+        (hit) =>
+          hit ||
+          fetch(req).then((res) => {
+            const copy = res.clone()
+            caches.open(CACHE).then((c) => c.put(req, copy))
+            return res
+          }),
+      ),
+    )
+    return
+  }
+
+  if (url.origin !== self.location.origin) return
 
   if (req.mode === 'navigate') {
     event.respondWith(
@@ -66,7 +87,7 @@ self.addEventListener('push', (event) => {
     self.registration.showNotification(d.title || "Alex's Organizer", {
       body: d.body || '',
       icon: '/icons/icon-192.png',
-      badge: '/icons/icon-192.png',
+      badge: '/icons/badge-96.png',
       tag: d.tag,
       renotify: !!d.tag,
       data: { url: d.url || '/' },

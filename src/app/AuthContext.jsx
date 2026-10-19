@@ -4,6 +4,7 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { createContext, useContext, useEffect, useState } from 'react'
 import { auth } from '../firebase.js'
 import { OWNER_EMAIL } from '../firebase-config.js'
+import { syncPush } from '../services/push.js'
 import { ensureUserDoc, watchUser } from '../services/users.js'
 
 const AuthContext = createContext(null)
@@ -32,6 +33,7 @@ export function AuthProvider({ children }) {
         if (!cancelled) retry = setTimeout(ensure, 3000)
       })
     ensure()
+    syncPush(user.uid) // keep this device's push token fresh
     const stop = watchUser(user.uid, setProfile, (e) => setError(e.message))
     return () => {
       cancelled = true

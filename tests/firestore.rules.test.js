@@ -166,6 +166,18 @@ describe('meditations, rewards, goals', () => {
   })
 })
 
+describe('notifications', () => {
+  it('my devices are mine to register; the reminder log is written only by the server', async () => {
+    await assertSucceeds(setDoc(doc(alex(), 'users', ALEX, 'devices', 'd1'), { token: 'abc', platform: 'android' }))
+    await assertSucceeds(setDoc(doc(alex(), 'users', ALEX, 'pushTests', 'p1'), { createdAt: 1 }))
+    await assertFails(setDoc(doc(alex(), 'users', ALEX, 'reminderLog', '2026-10-21_morningCheckin'), { outcome: 'send' }))
+    await assertSucceeds(getDoc(doc(alex(), 'users', ALEX, 'reminderLog', '2026-10-21_morningCheckin')))
+    const other = as('other', { email: 'someone@gmail.com', email_verified: true })
+    await assertFails(setDoc(doc(other, 'users', ALEX, 'devices', 'd2'), { token: 'evil' }))
+    await assertFails(setDoc(doc(other, 'users', ALEX, 'pushTests', 'p2'), { createdAt: 1 }))
+  })
+})
+
 describe('everyone else', () => {
   it('another Google account sees nothing, even in its own folder', async () => {
     const other = as('other', { email: 'someone@gmail.com', email_verified: true })

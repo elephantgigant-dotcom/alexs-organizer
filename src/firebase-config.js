@@ -19,3 +19,7 @@ export const OWNER_EMAIL = 'elephantgigant@gmail.com'
 // Our Firestore database: the named one in europe-central2 (Warsaw). Never "(default)".
 // Same id in firebase.json and functions/index.js.
 export const DATABASE_ID = 'alexs-organizer'
+
+// Web Push key for notifications (not secret). Firebase console → Project settings →
+// Cloud Messaging → Web Push certificates.
+export const VAPID_KEY = 'BGK6DE_-eyy_zCGAl_KPqR9XqOb6OETj3bC28QOZyrA99Rslr0D9AycVcDGujjwtUG0ZhU3IjxwF9ESV0m9r71A'

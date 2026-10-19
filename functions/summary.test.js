@@ -41,7 +41,7 @@ describe('weekly backup summary', () => {
   })
 
   it('the functions use the same date and sleep-score code as the app (run npm run sync:shared)', () => {
-    for (const f of ['dates.js', 'sleepScore.js']) {
+    for (const f of ['dates.js', 'sleepScore.js', 'reminders.js']) {
       expect(fs.readFileSync(`functions/shared/${f}`, 'utf8')).toBe(fs.readFileSync(`src/lib/${f}`, 'utf8'))
     }
   })
