@@ -1,0 +1,79 @@
+# Publishes the app automatically.
+# On every push: install → run the tests → build → upload the website,
+# the database security rules and indexes, then the reminders (Cloud Functions)
+# to Firebase project alexs-organizer.
+#
+# Needs one GitHub secret, FIREBASE_SERVICE_ACCOUNT (see docs/SETUP.md).
+# Without it, the tests and build still run, only the publishing steps are skipped.
+
+name: Test & publish
+
+on:
+  push:
+    branches: [main, claude/amazing-hypatia-okcq1z]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      HAS_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      # The local test database (Firestore emulator) needs Java 21+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install
+        run: npm ci
+
+      - name: Install Cloud Functions packages
+        run: npm ci --prefix functions
+
+      - name: Test the logic
+        run: npm test
+        env:
+          TZ: Europe/Warsaw
+
+      - name: Test the security rules
+        run: npm run test:rules
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish website and database rules
+        if: env.HAS_KEY == 'true'
+        env:
+          SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          echo "$SERVICE_ACCOUNT" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          npx firebase deploy --only hosting,firestore --project alexs-organizer --non-interactive
+
+      # Separate step: if reminders (Cloud Functions) can't be published,
+      # the website above is still updated.
+      - name: Publish reminders (Cloud Functions)
+        if: env.HAS_KEY == 'true'
+        env:
+          SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          echo "$SERVICE_ACCOUNT" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          npx firebase deploy --only functions --project alexs-organizer --non-interactive --force
+          rm -f "$RUNNER_TEMP/sa.json"
+
+      - name: Remind about the missing key
+        if: env.HAS_KEY != 'true'
+        run: echo "::notice::Not published — add the FIREBASE_SERVICE_ACCOUNT secret (docs/SETUP.md)."
