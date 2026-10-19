@@ -1,41 +1,67 @@
 import { describe, expect, it } from 'vitest'
 import { addDaysKey } from './dates.js'
-import { averageBedtime, fromNightMinutes, nightMinutes, sleepScore, weekComparison } from './sleepScore.js'
+import { averageBedtime, durationFit, fromNightMinutes, nightMinutes, qualityFit, rangeFit, regularityFit, sleepScore, weekComparison } from './sleepScore.js'
 
-const full = { fellAsleep: '23:10', wokeUp: '06:55', actualMinutes: 465, deepPct: 18, remPct: 22, lightPct: 60, quality: 10 }
-const prev = ['23:00', '23:20', '23:05', '22:55']
+const prev = ['23:00', '23:20', '23:05', '22:55'] // average 23:05
+const perfect = { fellAsleep: '23:05', actualMinutes: 480, deepPct: 18, remPct: 22.5, quality: 10 }
+const points = (r, key) => r.parts.find((p) => p.key === key)?.points
 
-describe('sleep score', () => {
-  it('a perfect night scores 100', () => {
-    const r = sleepScore(full, prev)
+describe('sleep score: strict curves, same weights', () => {
+  it('a perfect night scores 100 (40 + 30 + 20 + 10)', () => {
+    const r = sleepScore(perfect, prev)
     expect(r.score).toBe(100)
     expect(r.parts.map((p) => [p.key, p.points])).toEqual([['duration', 40], ['stages', 30], ['regularity', 20], ['quality', 10]])
   })
 
-  it('duration is linear below the target', () => {
-    // 6 h of 7.5 h = 80 % of 40 = 32 → 92
-    expect(sleepScore({ ...full, actualMinutes: 360 }, prev).score).toBe(92)
-    // above target is capped
-    expect(sleepScore({ ...full, actualMinutes: 600 }, prev).score).toBe(100)
+  it('a typical decent night lands around 75–85', () => {
+    const decent = { actualMinutes: 435, deepPct: 16, remPct: 20, fellAsleep: '23:25', quality: 7 } // 7 h 15, 20 min late
+    const decent2 = { actualMinutes: 440, deepPct: 17, remPct: 21, fellAsleep: '22:55', quality: 8 }
+    expect(sleepScore(decent, prev).score).toBe(74)
+    expect(sleepScore(decent2, prev).score).toBe(86)
   })
 
-  it('stages: full inside the ranges, falling to 0 at 10 points away', () => {
-    // deep 8 % is 5 below 13 → 0.5; REM fine → stages 0.75 × 30 = 22.5 → 92.5 → 93
-    expect(sleepScore({ ...full, deepPct: 8 }, prev).score).toBe(93)
-    expect(sleepScore({ ...full, deepPct: 0, remPct: 50 }, prev).parts.find((p) => p.key === 'stages').points).toBe(0)
+  it('a great night is 90+, a poor one far below', () => {
+    expect(sleepScore({ actualMinutes: 480, deepPct: 19, remPct: 23, fellAsleep: '23:05', quality: 9 }, prev).score).toBe(95)
+    expect(sleepScore({ actualMinutes: 365, deepPct: 11, remPct: 18, fellAsleep: '00:40', quality: 5 }, prev).score).toBe(22)
   })
 
-  it('regularity: ±30 min is fine, 0 at ±2 h, needs 2 earlier nights', () => {
-    expect(sleepScore({ ...full, fellAsleep: '23:35' }, prev).score).toBe(100) // exactly 30 min after the 23:05 average
-    expect(sleepScore({ ...full, fellAsleep: '00:45' }, prev).parts.find((p) => p.key === 'regularity').points).toBeCloseTo(4.1, 0)
-    expect(sleepScore({ ...full, fellAsleep: '02:00' }, prev).parts.find((p) => p.key === 'regularity').points).toBe(0)
-    expect(sleepScore(full, ['23:00']).parts.map((p) => p.key)).not.toContain('regularity')
+  it('duration: full at the target, a curve down to 0 at 5 h', () => {
+    expect(durationFit(450, 450)).toBe(1)
+    expect(durationFit(600, 450)).toBe(1)
+    expect(durationFit(420, 450)).toBeCloseTo(0.64) // 7 h → 25.6 of 40
+    expect(durationFit(375, 450)).toBeCloseTo(0.25) // 6 h 15
+    expect(durationFit(300, 450)).toBe(0)
+    expect(durationFit(200, 450)).toBe(0)
+  })
+
+  it('stages: full in the middle of the range, half at its edges, 0 at 8 points outside', () => {
+    expect(rangeFit(18, [13, 23])).toBe(1)
+    expect(rangeFit(13, [13, 23])).toBe(0.5)
+    expect(rangeFit(23, [13, 23])).toBe(0.5)
+    expect(rangeFit(9, [13, 23])).toBeCloseTo(0.25)
+    expect(rangeFit(5, [13, 23])).toBe(0)
+    expect(rangeFit(40, [20, 25])).toBe(0)
+  })
+
+  it('regularity: full within ±10 min, 70 % at ±30 min, 0 at ±90 min, needs 2 earlier nights', () => {
+    expect(regularityFit(10)).toBe(1)
+    expect(regularityFit(30)).toBeCloseTo(0.7)
+    expect(regularityFit(60)).toBeCloseTo(0.35)
+    expect(regularityFit(90)).toBe(0)
+    expect(points(sleepScore({ ...perfect, fellAsleep: '23:35' }, prev), 'regularity')).toBe(14)
+    expect(points(sleepScore({ ...perfect, fellAsleep: '00:45' }, prev), 'regularity')).toBe(0)
+    expect(sleepScore(perfect, ['23:00']).parts.map((p) => p.key)).not.toContain('regularity')
+  })
+
+  it('quality: a curve, so an 8 is not almost full', () => {
+    expect(qualityFit(10)).toBe(1)
+    expect(qualityFit(1)).toBe(0)
+    expect(qualityFit(8)).toBeCloseTo(0.686, 2)
   })
 
   it('missing stages: their weight goes to the others', () => {
-    const noStages = { actualMinutes: 360, fellAsleep: '23:10', quality: 10 }
-    // duration 32/40 + regularity 20/20 + quality 10/10 = 62 of 70 → 89
-    expect(sleepScore(noStages, prev).score).toBe(89)
+    // duration 25.6/40 + regularity 20/20 + quality 10/10 = 55.6 of 70 → 79
+    expect(sleepScore({ actualMinutes: 420, fellAsleep: '23:10', quality: 10 }, prev).score).toBe(79)
   })
 
   it('only a quality rating still gives a score; nothing gives none', () => {

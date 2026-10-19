@@ -1,11 +1,16 @@
 // Sleep score 0–100: simple, transparent, NOT medical advice.
 //
-//   Duration    40  full at or above the target (default 7 h 30 min), linear below
-//   Stages      30  deep % and REM % inside healthy ranges (defaults deep 13–23 %, REM 20–25 %);
-//                   each is half; outside the range it drops linearly to 0 at 10 points away
-//   Regularity  20  fell asleep within ±30 min of the average of the previous 7 nights;
-//                   drops linearly to 0 at ±2 h; needs at least 2 earlier nights
-//   Quality     10  my own 1–10 rating
+// The curves are deliberately strict: a typical decent night lands around 75–85,
+// a great night 90+.
+//
+//   Duration    40  full at or above the target (default 7 h 30 min); below it the score
+//                   falls on a curve that reaches 0 at 5 h: ((actual − 5 h) / (target − 5 h))²
+//   Stages      30  deep % and REM % (each half). Full only in the MIDDLE of the healthy range
+//                   (defaults deep 13–23 %, REM 20–25 %), half at the edges of the range,
+//                   0 at 8 points outside it
+//   Regularity  20  fell asleep vs the average of the previous 7 nights: full within ±10 min,
+//                   70 % at ±30 min, 0 at ±90 min; needs at least 2 earlier nights
+//   Quality     10  my own 1–10 rating on a curve: ((rating − 1) / 9)^1.5
 // Missing parts are left out and their weight goes to the others (score = points / available × 100).
 // Nothing at all → no score.
 
@@ -18,7 +23,7 @@ export const DEFAULT_SLEEP_TARGETS = {
 export const SCORE_WEIGHTS = { duration: 40, stages: 30, regularity: 20, quality: 10 }
 
 export const HOW_CALCULATED =
-  'Duration 40 · stages 30 · regularity 20 · your quality rating 10. Missing parts are left out. Not medical advice.'
+  'Duration 40 (full at your target) · stages 30 (full in the middle of the healthy ranges) · regularity 20 (full within ±10 min of your usual bedtime) · your quality rating 10. Strict on purpose: a decent night is about 75–85. Missing parts are left out. Not medical advice.'
 
 export function sleepTargets(settings) {
   return { ...DEFAULT_SLEEP_TARGETS, ...(settings?.sleep || {}) }
@@ -45,10 +50,29 @@ export function fromNightMinutes(n) {
 
 const clamp01 = (x) => Math.max(0, Math.min(1, x))
 
-function rangeFit(value, [lo, hi], falloff = 10) {
-  if (value >= lo && value <= hi) return 1
+// 1 at the middle of the range, 0.5 at its edges, 0 at `falloff` points outside
+export function rangeFit(value, [lo, hi], falloff = 8) {
+  const mid = (lo + hi) / 2
+  const half = (hi - lo) / 2
+  if (value >= lo && value <= hi) return 1 - (0.5 * Math.abs(value - mid)) / half
   const dist = value < lo ? lo - value : value - hi
-  return clamp01(1 - dist / falloff)
+  return clamp01(0.5 * (1 - dist / falloff))
+}
+
+export function durationFit(minutes, targetMin) {
+  const floor = 300 // 5 h
+  if (minutes >= targetMin) return 1
+  return clamp01((minutes - floor) / (targetMin - floor)) ** 2
+}
+
+export function regularityFit(diffMin) {
+  if (diffMin <= 10) return 1
+  if (diffMin <= 30) return 1 - (0.3 * (diffMin - 10)) / 20
+  return clamp01(0.7 * (1 - (diffMin - 30) / 60))
+}
+
+export function qualityFit(rating) {
+  return clamp01((rating - 1) / 9) ** 1.5
 }
 
 // sleep = the morning check-in's sleep map; previousBedtimes = fellAsleep of up to 7 earlier nights
@@ -57,7 +81,7 @@ export function sleepScore(sleep, previousBedtimes = [], targets = DEFAULT_SLEEP
   const parts = []
 
   if (typeof sleep.actualMinutes === 'number') {
-    parts.push({ key: 'duration', label: 'Duration', max: SCORE_WEIGHTS.duration, fit: clamp01(sleep.actualMinutes / targets.targetMin) })
+    parts.push({ key: 'duration', label: 'Duration', max: SCORE_WEIGHTS.duration, fit: durationFit(sleep.actualMinutes, targets.targetMin) })
   }
 
   const stageFits = []
@@ -70,11 +94,11 @@ export function sleepScore(sleep, previousBedtimes = [], targets = DEFAULT_SLEEP
   const prev = previousBedtimes.filter(Boolean).slice(-7)
   if (sleep.fellAsleep && prev.length >= 2) {
     const diff = Math.abs(nightMinutes(sleep.fellAsleep) - averageBedtime(prev))
-    parts.push({ key: 'regularity', label: 'Regularity', max: SCORE_WEIGHTS.regularity, fit: diff <= 30 ? 1 : clamp01(1 - (diff - 30) / 90) })
+    parts.push({ key: 'regularity', label: 'Regularity', max: SCORE_WEIGHTS.regularity, fit: regularityFit(diff) })
   }
 
   if (typeof sleep.quality === 'number') {
-    parts.push({ key: 'quality', label: 'Quality', max: SCORE_WEIGHTS.quality, fit: (sleep.quality - 1) / 9 })
+    parts.push({ key: 'quality', label: 'Quality', max: SCORE_WEIGHTS.quality, fit: qualityFit(sleep.quality) })
   }
 
   if (!parts.length) return null
