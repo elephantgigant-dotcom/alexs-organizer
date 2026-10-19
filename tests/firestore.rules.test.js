@@ -2,9 +2,9 @@
 // Run with: npm run test:rules   (starts a local Firestore emulator; GitHub Actions runs it on every push)
 
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { deleteDoc, doc, getDoc, increment, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
 import fs from 'node:fs'
-import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 let env
 const ALEX = 'alex-uid'
@@ -112,6 +112,57 @@ describe('tasks', () => {
     await assertFails(put(task({ title: '' })))
     await assertFails(put(task({ date: 'tomorrow' })))
     await assertFails(put(task({ priority: 'urgent' })))
+  })
+})
+
+describe('stars can never be paid twice', () => {
+  const payout = (db, id, amount = 5) => {
+    const b = writeBatch(db)
+    b.set(doc(db, 'users', ALEX, 'starEvents', id), { amount, type: 'meditation', refId: 'm1', note: 'Morning meditation', date: '2026-10-19' })
+    b.update(doc(db, 'users', ALEX), { balance: increment(amount) })
+    return b.commit()
+  }
+
+  it('the first payout works, the same payout again is rejected and the balance stays', async () => {
+    const db = alex()
+    await assertSucceeds(payout(db, 'meditation_m1'))
+    await assertFails(payout(db, 'meditation_m1'))
+    const snap = await getDoc(doc(db, 'users', ALEX))
+    expect(snap.data().balance).toBe(15) // 10 + 5, not 20
+  })
+
+  it('history entries cannot be edited, only created (or deleted by undo)', async () => {
+    const db = alex()
+    await assertSucceeds(payout(db, 'task_t1', 3))
+    await assertFails(updateDoc(doc(db, 'users', ALEX, 'starEvents', 'task_t1'), { amount: 300 }))
+    await assertSucceeds(deleteDoc(doc(db, 'users', ALEX, 'starEvents', 'task_t1')))
+  })
+
+  it('star events need a sane amount, type and date', async () => {
+    const put = (data) => setDoc(doc(alex(), 'users', ALEX, 'starEvents', 'x'), data)
+    await assertFails(put({ amount: 5000, type: 'task', date: '2026-10-19' }))
+    await assertFails(put({ amount: 5, type: 'gift', date: '2026-10-19' }))
+    await assertFails(put({ amount: 2.5, type: 'checkin', date: '2026-10-19' }))
+    await assertSucceeds(put({ amount: -500, type: 'redeem', note: 'Play a video game I want', date: '2026-10-19' }))
+  })
+})
+
+describe('meditations, rewards, goals', () => {
+  it('meditation length 5–30 minutes, known status', async () => {
+    const put = (data) => setDoc(doc(alex(), 'users', ALEX, 'meditations', 'm1'), data)
+    const m = { slot: 'morning', date: '2026-10-19', plannedMin: 10, startedAt: 1, endsAt: 600001, status: 'running' }
+    await assertSucceeds(put(m))
+    await assertFails(put({ ...m, plannedMin: 3 }))
+    await assertFails(put({ ...m, plannedMin: 31 }))
+    await assertFails(put({ ...m, status: 'skipped' }))
+    await assertFails(put({ ...m, slot: 'noon' }))
+  })
+  it('rewards have a title and a whole-star price; goals a target and period', async () => {
+    await assertSucceeds(setDoc(doc(alex(), 'users', ALEX, 'rewards', 'r1'), { title: 'Play a video game I want', price: 500 }))
+    await assertFails(setDoc(doc(alex(), 'users', ALEX, 'rewards', 'r1'), { title: '', price: 500 }))
+    await assertFails(setDoc(doc(alex(), 'users', ALEX, 'rewards', 'r1'), { title: 'Game', price: 0 }))
+    await assertSucceeds(setDoc(doc(alex(), 'users', ALEX, 'goals', 'g1'), { title: 'October', target: 300, period: 'month' }))
+    await assertFails(setDoc(doc(alex(), 'users', ALEX, 'goals', 'g1'), { title: 'October', target: 300, period: 'year' }))
   })
 })
 

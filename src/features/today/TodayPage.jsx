@@ -1,10 +1,15 @@
 // Today: date, star balance, overdue tasks, today's tasks with progress.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { useData } from '../../app/DataContext.jsx'
 import { Fab } from '../../app/Layout.jsx'
-import { formatDue, formatLongDate, todayKey, warsawParts } from '../../lib/dates.js'
+import { checkinId, previousBedtimes } from '../../lib/checkins.js'
+import { addDaysKey, formatDue, formatLongDate, todayKey, warsawParts } from '../../lib/dates.js'
+import { formatClock, remainingMs } from '../../lib/meditation.js'
+import { formatDuration } from '../../lib/sleep.js'
+import { sleepScore, sleepTargets, weekComparison } from '../../lib/sleepScore.js'
+import { useNow } from '../meditation/timerState.js'
 import { watchTasksInRange } from '../../services/tasks.js'
 import { EmptyState, PageTitle, SectionTitle } from '../../ui/basics.jsx'
 import { Icon } from '../../ui/Icons.jsx'
@@ -40,6 +45,7 @@ export function TodayPage() {
     return [...open, ...done]
   }, [todays])
   const doneCount = todays.filter((t) => t.status === 'done').length
+  const evening = warsawParts().hh >= 17
 
   return (
     <div className="flex flex-col gap-6">
@@ -60,6 +66,10 @@ export function TodayPage() {
       >
         {greeting(warsawParts().hh)}
       </PageTitle>
+
+      <ActiveMeditation />
+      <DayCards today={today} evening={evening} />
+      <SleepScoreCard today={today} />
 
       {overdue.length > 0 && (
         <section className="flex flex-col gap-2.5" aria-label="Overdue">
@@ -85,5 +95,87 @@ export function TodayPage() {
 
       <Fab label="New task" onClick={() => openTask(null, today)} />
     </div>
+  )
+}
+
+// Morning: check-in + morning meditation. From 17:00: evening check-in + evening meditation.
+function DayCards({ today, evening }) {
+  const { checkinById, meditations, settings, values } = useData()
+  const navigate = useNavigate()
+  const slot = evening ? 'evening' : 'morning'
+  const checkin = checkinById[checkinId(today, slot)]
+  const meditated = meditations.some((m) => m.date === today && m.slot === slot && m.status === 'done')
+  const other = evening ? checkinById[checkinId(today, 'morning')] : null
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={() => navigate(`/checkin/${slot}`)}
+          className="flex flex-col gap-2.5 rounded-[20px] border border-line bg-surface p-4 text-left"
+        >
+          <span className="text-accent">
+            <Icon name={evening ? 'moon' : 'sun'} />
+          </span>
+          <span className="text-base font-bold">{evening ? 'Evening check-in' : 'Morning check-in'}</span>
+          <span className="text-sm text-muted">
+            {checkin ? `Done${checkin.mood ? ` · mood ${checkin.mood}` : ''} · edit` : evening ? `Day rating, reflections · +${values.checkin}` : `Mood, sleep, 3 intentions · +${values.checkin}`}
+          </span>
+        </button>
+        <button type="button" onClick={() => navigate('/meditate')} className="flex flex-col gap-2.5 rounded-[20px] bg-accent-soft p-4 text-left">
+          <span className="text-accent">
+            <Icon name="clock" />
+          </span>
+          <span className="text-base font-bold">Meditate</span>
+          <span className="text-sm text-muted">
+            {meditated ? `Done · ${slot}` : `${evening ? 'Evening' : 'Morning'} · ${settings.meditation[`${slot}Min`]} min · +${values.meditation}`}
+          </span>
+        </button>
+      </div>
+      {evening && !other && (
+        <button type="button" onClick={() => navigate('/checkin/morning')} className="h-11 self-start text-sm font-bold text-accent">
+          Morning check-in not filled in · add it
+        </button>
+      )}
+    </div>
+  )
+}
+
+function SleepScoreCard({ today }) {
+  const { mornings, settings } = useData()
+  const navigate = useNavigate()
+  const targets = sleepTargets(settings)
+  const scoreOf = (c) => sleepScore(c.sleep, previousBedtimes(mornings, c.date), targets)?.score ?? null
+  const last = mornings.find((c) => c.date === today && c.sleep)
+  const lastScore = last ? scoreOf(last) : null
+  if (lastScore == null) return null
+  const recent = mornings.filter((c) => c.date >= addDaysKey(today, -13) && c.sleep).map((c) => ({ date: c.date, value: scoreOf(c) }))
+  const { average } = weekComparison(recent, today, addDaysKey)
+  return (
+    <button
+      type="button"
+      onClick={() => navigate('/checkin/morning')}
+      className="flex min-h-14 items-center justify-between gap-3 rounded-[18px] border border-line bg-surface px-4 py-2.5 text-left"
+    >
+      <span className="flex flex-col gap-0.5">
+        <span className="text-[13px] font-semibold text-muted">Last night's sleep score</span>
+        <span className="text-sm font-semibold">
+          {[last.sleep.actualMinutes != null && formatDuration(last.sleep.actualMinutes), average != null && `7-day avg ${Math.round(average)}`].filter(Boolean).join(' · ')}
+        </span>
+      </span>
+      <span className="text-[28px] font-extrabold tracking-tight">{lastScore}</span>
+    </button>
+  )
+}
+
+function ActiveMeditation() {
+  const { activeMeditation: s } = useData()
+  const now = useNow(1000)
+  if (!s) return null
+  return (
+    <Link to="/meditate" className="flex min-h-14 items-center justify-between rounded-[18px] bg-accent px-4 font-bold text-on-accent no-underline">
+      <span>{s.status === 'paused' ? 'Meditation paused' : 'Meditation in progress'}</span>
+      <span className="tabular-nums">{formatClock(remainingMs(s, now))}</span>
+    </Link>
   )
 }

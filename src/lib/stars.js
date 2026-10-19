@@ -57,3 +57,14 @@ export const starEventId = {
   meditation: (sessionId) => `meditation_${sessionId}`,
   streak: (kind, dateKey) => `streak_${kind}_${dateKey}`,
 }
+
+// A streak bonus is due when TODAY is the first activity of its kind today and the streak
+// (including today) reaches a multiple of streakEvery. → { id, amount, note } or null
+const STREAK_LABEL = { meditation: 'meditation', checkin: 'check-in', tasks: 'task' }
+
+export function streakBonusFor(kind, activeDays, today, values) {
+  if (activeDays.has(today)) return null
+  const streak = currentStreak(new Set([...activeDays, today]), today)
+  if (!streakBonusDue(streak, values)) return null
+  return { id: starEventId.streak(kind, today), amount: values.streakBonus, note: `${streak}-day ${STREAK_LABEL[kind] || kind} streak` }
+}

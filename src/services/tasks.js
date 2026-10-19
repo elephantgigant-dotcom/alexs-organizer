@@ -21,7 +21,8 @@ import {
 import { db } from '../firebase.js'
 import { todayKey, toDate, warsawToDate } from '../lib/dates.js'
 import { isRecurring, nextOccurrence } from '../lib/recurrence.js'
-import { starEventId } from '../lib/stars.js'
+import { starEventId, streakBonusFor } from '../lib/stars.js'
+import { addPayout } from './stars.js'
 
 const col = (uid) => collection(db, 'users', uid, 'tasks')
 const fromSnap = (d) => ({ id: d.id, ...d.data(), completedAt: toDate(d.data().completedAt) })
@@ -29,6 +30,11 @@ const fromSnap = (d) => ({ id: d.id, ...d.data(), completedAt: toDate(d.data().c
 // Every open task (today, overdue, future)
 export function watchOpenTasks(uid, onChange) {
   return onSnapshot(query(col(uid), where('status', '==', 'open')), (snap) => onChange(snap.docs.map(fromSnap)))
+}
+
+// Days with at least one finished task, from `from` on (for the task streak)
+export function watchDoneSince(uid, from, onChange) {
+  return onSnapshot(query(col(uid), where('completedDate', '>=', from)), (snap) => onChange(snap.docs.map(fromSnap)))
 }
 
 // Every task (open and done) dated in [from, to], e.g. one week
@@ -66,44 +72,36 @@ export function deleteTask(uid, id) {
   return deleteDoc(doc(col(uid), id))
 }
 
-// Done! → { earned, nextDate, nextId }
-export async function completeTask(uid, task, now = new Date()) {
+// Done! → { earned, bonus, nextDate, nextId }
+// taskDays = dates with a finished task (for the streak bonus); values = star settings
+export async function completeTask(uid, task, { taskDays = new Set(), values } = {}, now = new Date()) {
   const today = todayKey(now)
-  const batch = writeBatch(db)
   const earned = task.stars
-  let nextId = null
-  let nextDate = null
+  const seriesId = task.seriesId || task.id
+  const nextDate = isRecurring(task.recurrence) ? nextOccurrence(task.date, task.recurrence, today) : null
+  const nextId = nextDate ? `${seriesId}_${nextDate}` : null // fixed id: a double tap can't create two
+  const bonus = values ? streakBonusFor('tasks', taskDays, today, values) : null
 
-  if (isRecurring(task.recurrence)) {
-    nextDate = nextOccurrence(task.date, task.recurrence, today)
-    const seriesId = task.seriesId || task.id
-    nextId = `${seriesId}_${nextDate}` // fixed id: a double tap can't create two
-    batch.set(doc(col(uid), nextId), {
-      ...taskFields({ ...task, date: nextDate }),
-      seriesId,
-      status: 'open',
-      createdAt: serverTimestamp(),
-    })
+  const build = (withBonus) => {
+    const batch = writeBatch(db)
+    if (nextId) {
+      batch.set(doc(col(uid), nextId), { ...taskFields({ ...task, date: nextDate }), seriesId, status: 'open', createdAt: serverTimestamp() })
+    }
+    batch.update(doc(col(uid), task.id), { status: 'done', completedAt: serverTimestamp(), completedDate: today, earned, nextId })
+    addPayout(batch, uid, { id: starEventId.task(task.id), amount: earned, type: 'task', refId: task.id, note: task.title, date: today })
+    if (withBonus) addPayout(batch, uid, { ...bonus, type: 'streak', date: today })
+    return batch
   }
 
-  batch.update(doc(col(uid), task.id), {
-    status: 'done',
-    completedAt: serverTimestamp(),
-    completedDate: today,
-    earned,
-    nextId,
-  })
-  batch.set(doc(db, 'users', uid, 'starEvents', starEventId.task(task.id)), {
-    amount: earned,
-    type: 'task',
-    refId: task.id,
-    note: task.title,
-    date: today,
-    createdAt: serverTimestamp(),
-  })
-  batch.update(doc(db, 'users', uid), { balance: increment(earned) })
-  await batch.commit()
-  return { earned, nextDate, nextId }
+  try {
+    await build(!!bonus).commit()
+    return { earned, bonus: bonus?.amount || 0, nextDate, nextId }
+  } catch (e) {
+    // The streak bonus was already paid (e.g. on another device): save without it
+    if (!bonus || e.code !== 'permission-denied') throw e
+    await build(false).commit()
+    return { earned, bonus: 0, nextDate, nextId }
+  }
 }
 
 // Undo: back to open, stars taken back, the auto-created next one removed

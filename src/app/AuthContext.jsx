@@ -22,19 +22,20 @@ export function AuthProvider({ children }) {
       setProfile(user === undefined ? undefined : null)
       return
     }
-    let stop = () => {}
     let cancelled = false
-    ensureUserDoc(user)
-      .then(() => {
-        if (!cancelled) stop = watchUser(user.uid, setProfile, (e) => setError(e.message))
+    let retry = 0
+    // Make sure the profile exists. Offline or a slow first connection: keep showing what the
+    // device has cached and try again a little later instead of failing.
+    const ensure = () =>
+      ensureUserDoc(user).catch((e) => {
+        console.warn('Profile check:', e.code || e.message)
+        if (!cancelled) retry = setTimeout(ensure, 3000)
       })
-      .catch((e) => {
-        console.error(e)
-        setError(e.message)
-        setProfile(null)
-      })
+    ensure()
+    const stop = watchUser(user.uid, setProfile, (e) => setError(e.message))
     return () => {
       cancelled = true
+      clearTimeout(retry)
       stop()
     }
   }, [user, isOwner])

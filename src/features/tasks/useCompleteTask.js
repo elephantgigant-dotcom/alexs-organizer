@@ -7,7 +7,7 @@ import { completeTask, undoTask } from '../../services/tasks.js'
 import { useCelebrate } from '../../ui/Celebrate.jsx'
 
 export function useCompleteTask() {
-  const { uid } = useData()
+  const { uid, taskDays, values } = useData()
   const { toast, celebrate } = useCelebrate()
   const busy = useRef(new Set()) // no double pay on a double tap
 
@@ -16,9 +16,9 @@ export function useCompleteTask() {
     busy.current.add(task.id)
     celebrate()
     try {
-      const { earned, nextDate, nextId } = await completeTask(uid, task)
+      const { earned, bonus, nextDate, nextId } = await completeTask(uid, task, { taskDays, values })
       toast({
-        title: `+${earned} stars`,
+        title: bonus ? `+${earned} stars · +${bonus} streak bonus` : `+${earned} stars`,
         text: nextDate ? `Next one: ${formatDue(nextDate, task.time)}` : task.title,
         actionLabel: 'Undo',
         onAction: () => undoTask(uid, { ...task, earned, nextId }),

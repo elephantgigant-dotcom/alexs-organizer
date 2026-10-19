@@ -7,8 +7,11 @@
   times are `HH:MM`. Weeks start on **Monday**; a week's id is its Monday's key.
 - All database reads and writes live in `src/services/` only.
 - Stars are paid through **star events with fixed ids** (`task_<id>`, `checkin_<date>_<type>`,
-  `meditation_<id>`, `streak_<kind>_<date>`), written in the same batch as the balance change,
-  so the history never shows a payout twice; the app also ignores a second tap while saving.
+  `meditation_<id>`, `streak_<kind>_<date>`), written in the same batch as the balance change.
+  The rules make star events **create-only**, so paying the same thing twice is rejected and the
+  whole batch (balance included) fails: nothing can pay twice, even offline or on two devices.
+- Streak bonus: when the first task / check-in / meditation of a day makes a streak reach a
+  multiple of "every N days" (default 7), +bonus (default 10). Values editable in Settings.
 - **Every rating is a whole number 1–10** (mood, energy, sleep quality, day rating). Charts use a
   1–10 axis; averages show one decimal. Task stars stay 1–5 (effort, not a rating).
 
@@ -55,9 +58,9 @@ users/{uid}/checkins/{date}_{type}   one per day per type (the id enforces it), 
   type 'evening': mood 1–10, energy 1–10, dayRating 1–10, wentWell, improve, gratitude, note
   + date, createdAt, updatedAt
 
-users/{uid}/meditations/{id}    slot 'morning'|'evening', date, plannedMin, startedAt,
-                                endsAt (timestamp-based timer), pausedAt?, pausedMs,
-                                status 'running'|'done'|'cancelled', completedAt, stars
+users/{uid}/meditations/{id}    slot 'morning'|'evening', date, plannedMin 5–30, startedAt (ms),
+                                endsAt (ms, the timer is timestamp-based), remainingMs (while paused),
+                                status 'running'|'paused'|'done'|'cancelled', completedAt, stars
 
 users/{uid}/starEvents/{id}     amount (+/−), type 'task'|'checkin'|'meditation'|'streak'|'redeem'|'undo',
                                 refId, note, date, createdAt

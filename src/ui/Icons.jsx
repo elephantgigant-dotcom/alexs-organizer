@@ -7,6 +7,7 @@ const PATHS = {
   stats: 'M5 20V11M12 20V5M19 20v-7',
   more: 'M5 12h.01M12 12h.01M19 12h.01',
   plus: 'M12 5v14M5 12h14',
+  minus: 'M5 12h14',
   close: 'M6 6l12 12M18 6L6 18',
   back: 'M15 6l-6 6 6 6',
   next: 'M9 6l6 6-6 6',

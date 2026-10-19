@@ -29,6 +29,10 @@ export function MorePage() {
       </Card>
 
       <Card className="overflow-hidden p-0">
+        <Row icon="edit" title="Journal" sub="Past check-ins, edit or fill in" onClick={() => navigate('/journal')} />
+        <div className="mx-4 border-t border-line" />
+        <Row icon="star" title="Stars, meditation, sleep" sub={`Meditation ${settings.meditation.morningMin}/${settings.meditation.eveningMin} min · sleep target ${Math.floor(settings.sleep.targetMin / 60)} h ${settings.sleep.targetMin % 60} min`} onClick={() => navigate('/more/values')} />
+        <div className="mx-4 border-t border-line" />
         <Row icon="tag" title="Areas of life" sub={`${categories.length} categories`} onClick={() => navigate('/more/categories')} />
         <div className="mx-4 border-t border-line" />
         <Row icon="lock" title="PIN lock" sub={settings.pin ? `On · locks after ${lockLabel(settings.autoLockMin)}` : 'Off'} onClick={() => navigate('/more/pin')} />

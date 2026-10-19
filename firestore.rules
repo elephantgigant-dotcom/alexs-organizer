@@ -63,6 +63,34 @@ service cloud.firestore {
         && (!('priority' in d) || d.priority in ['low', 'normal', 'high']);
     }
 
+    // Star history: create-only. A payout has a fixed id (task_<id>, checkin_<date>_<type>,
+    // meditation_<id>, streak_<kind>_<date>), and the balance change is in the same batch,
+    // so writing the same payout twice is rejected and the batch (balance included) fails.
+    function validStarEvent(d) {
+      return d.amount is int && d.amount >= -100000 && d.amount <= 1000
+        && d.type in ['task', 'checkin', 'meditation', 'streak', 'redeem', 'adjust']
+        && isDateKey(d.date);
+    }
+
+    function validMeditation(d) {
+      return d.slot in ['morning', 'evening']
+        && isDateKey(d.date)
+        && d.plannedMin is int && d.plannedMin >= 5 && d.plannedMin <= 30
+        && d.status in ['running', 'paused', 'done', 'cancelled']
+        && d.endsAt is int;
+    }
+
+    function validReward(d) {
+      return d.title is string && d.title.size() > 0 && d.title.size() <= 120
+        && d.price is int && d.price >= 1 && d.price <= 100000;
+    }
+
+    function validGoal(d) {
+      return d.title is string && d.title.size() > 0 && d.title.size() <= 120
+        && d.target is int && d.target >= 1 && d.target <= 100000
+        && d.period in ['week', 'month', 'total'];
+    }
+
     // Profile + settings (theme, star values, PIN hash, reminder times…)
     match /users/{uid} {
       allow read, write: if isOwner(uid);
@@ -77,11 +105,32 @@ service cloud.firestore {
         allow create, update: if isOwner(uid) && validTask(request.resource.data);
       }
 
-      // categories, meditations, starEvents, rewards, goals, devices, pushTests …
+      match /starEvents/{id} {
+        allow read, delete: if isOwner(uid);   // delete = undo a finished task
+        allow create: if isOwner(uid) && validStarEvent(request.resource.data);
+        allow update: if false;
+      }
+
+      match /meditations/{id} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && validMeditation(request.resource.data);
+      }
+
+      match /rewards/{id} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && validReward(request.resource.data);
+      }
+
+      match /goals/{id} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && validGoal(request.resource.data);
+      }
+
+      // categories, devices, pushTests …
       match /{collection}/{docId} {
         allow read: if isOwner(uid);
         // Weekly backups are written only by the server; checked collections have their own rules above
-        allow write: if isOwner(uid) && !(collection in ['weeklySummaries', 'checkins', 'tasks']);
+        allow write: if isOwner(uid) && !(collection in ['weeklySummaries', 'checkins', 'tasks', 'starEvents', 'meditations', 'rewards', 'goals']);
       }
     }
 
