@@ -1,50 +1,86 @@
-// Stage 0 shell: Google login, owner-only check. The real screens arrive in stage 2.
+// Which screen to show: login → (not Alex? private) → PIN lock → the app.
 
-import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut } from 'firebase/auth'
-import { useEffect, useState } from 'react'
-import { auth } from './firebase.js'
-import { OWNER_EMAIL } from './firebase-config.js'
+import { useEffect } from 'react'
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router'
+import { AuthProvider, useAuth } from './app/AuthContext.jsx'
+import { DataProvider, useData } from './app/DataContext.jsx'
+import { Layout } from './app/Layout.jsx'
+import { Centered, LoginPage, NotAllowed } from './features/auth/LoginPage.jsx'
+import { PIN_RESET_KEY, PinGate } from './features/pin/PinGate.jsx'
+import { CategoriesPage } from './features/settings/CategoriesPage.jsx'
+import { MorePage } from './features/settings/MorePage.jsx'
+import { PinPage } from './features/settings/PinPage.jsx'
+import { StarsPage } from './features/stars/StarsPage.jsx'
+import { StatsPage } from './features/stats/StatsPage.jsx'
+import { TaskSheetProvider } from './features/tasks/TaskSheet.jsx'
+import { TodayPage } from './features/today/TodayPage.jsx'
+import { WeekPage } from './features/week/WeekPage.jsx'
+import { applyTheme, storedTheme } from './lib/theme.js'
+import { updateSettings } from './services/users.js'
+import { CelebrateProvider, useCelebrate } from './ui/Celebrate.jsx'
+
+applyTheme(storedTheme())
 
 export default function App() {
-  const [user, setUser] = useState(undefined)
-  const [error, setError] = useState('')
-  useEffect(() => onAuthStateChanged(auth, setUser), [])
-
-  async function login() {
-    setError('')
-    const provider = new GoogleAuthProvider()
-    provider.setCustomParameters({ prompt: 'select_account' })
-    try {
-      await signInWithPopup(auth, provider)
-    } catch (e) {
-      if (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment') {
-        await signInWithRedirect(auth, provider)
-      } else if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
-        setError(`Sign-in failed (${e.code || e.message})`)
-      }
-    }
-  }
-
-  if (user === undefined) return null
-  const isOwner = user?.email === OWNER_EMAIL
-
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-6 p-6">
-      <img src="/icons/icon.svg" alt="" className="size-20" />
-      <h1 className="m-0 text-3xl font-bold">Alex's Organizer</h1>
-      {!user && (
-        <button type="button" onClick={login} className="h-14 rounded-2xl bg-accent px-6 text-lg font-semibold text-on-accent">
-          Sign in with Google
-        </button>
-      )}
-      {user && isOwner && <p className="m-0 text-muted">Signed in as {user.email}. The app is being built — stage 0 is live.</p>}
-      {user && !isOwner && <p className="m-0 text-danger">This app is private. {user.email} has no access.</p>}
-      {user && (
-        <button type="button" onClick={() => signOut(auth)} className="h-12 rounded-2xl bg-surface-2 px-6 font-semibold">
-          Sign out
-        </button>
-      )}
-      {error && <p className="m-0 text-danger">{error}</p>}
-    </main>
+    <AuthProvider>
+      <CelebrateProvider>
+        <BrowserRouter>
+          <Gate />
+        </BrowserRouter>
+      </CelebrateProvider>
+    </AuthProvider>
   )
+}
+
+function Gate() {
+  const { user, profile, isOwner, error } = useAuth()
+  if (user === undefined) return null
+  if (!user) return <LoginPage />
+  if (!isOwner) return <NotAllowed email={user.email} />
+  if (error && !profile) return <Centered><p className="text-danger">Couldn't load your data: {error}</p></Centered>
+  if (profile === undefined) return null
+  return (
+    <DataProvider>
+      <PinGate>
+        <PinResetAfterLogin />
+        <TaskSheetProvider>
+          <Routes>
+            <Route element={<Layout />}>
+              <Route index element={<TodayPage />} />
+              <Route path="week" element={<WeekPage />} />
+              <Route path="stars" element={<StarsPage />} />
+              <Route path="stats" element={<StatsPage />} />
+              <Route path="more" element={<MorePage />} />
+              <Route path="more/categories" element={<CategoriesPage />} />
+              <Route path="more/pin" element={<PinPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
+          </Routes>
+        </TaskSheetProvider>
+      </PinGate>
+    </DataProvider>
+  )
+}
+
+// "Forgot PIN" → signed in with Google again → remove the old PIN, offer a new one
+function PinResetAfterLogin() {
+  const { uid } = useData()
+  const navigate = useNavigate()
+  const { toast } = useCelebrate()
+  useEffect(() => {
+    let flagged = false
+    try {
+      flagged = localStorage.getItem(PIN_RESET_KEY) === '1'
+      localStorage.removeItem(PIN_RESET_KEY)
+    } catch {
+      // fine
+    }
+    if (!flagged) return
+    updateSettings(uid, { pin: null }).then(() => {
+      navigate('/more/pin')
+      toast({ title: 'PIN removed', text: 'Set a new one here.' })
+    })
+  }, [uid, navigate, toast])
+  return null
 }

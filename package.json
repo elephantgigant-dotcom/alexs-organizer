@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:rules": "firebase emulators:exec --only firestore --project demo-alexs-organizer \"vitest run --config vitest.rules.config.js\"",
-    "emulators": "firebase emulators:start --project demo-alexs-organizer"
+    "emulators": "firebase emulators:start --project demo-alexs-organizer",
+    "test:e2e": "firebase emulators:exec --only auth,firestore --project demo-alexs-organizer \"playwright test\""
   },
   "dependencies": {
     "firebase": "^13.0.0",
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^6.0.0",
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.1.2",
     "firebase-tools": "^15.34.0",

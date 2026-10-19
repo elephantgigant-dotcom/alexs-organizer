@@ -12,6 +12,6 @@ export default defineConfig({
   define: { __BUILD__: JSON.stringify(build) },
   test: {
     include: ['src/**/*.test.js', 'functions/**/*.test.js'],
-    exclude: ['**/node_modules/**'],
+    exclude: ['**/node_modules/**', 'e2e/**'],
   },
 })

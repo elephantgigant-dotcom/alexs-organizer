@@ -6,6 +6,7 @@ rules_version = '2';
 // Only ONE Google account may read or write anything:
 // elephantgigant@gmail.com (verified email), and only inside its own
 // users/{uid} folder. Anyone else who signs in sees nothing.
+// Check-ins and tasks are also checked for sensible values.
 // Cloud Functions use the Admin SDK and are not affected by these rules.
 // ─────────────────────────────────────────────────────────────
 service cloud.firestore {
@@ -18,16 +19,69 @@ service cloud.firestore {
         && request.auth.token.email_verified == true;
     }
 
+    // Optional whole number lo..hi (missing or null is fine)
+    function optInt(m, k, lo, hi) {
+      return !(k in m) || m[k] == null || (m[k] is int && m[k] >= lo && m[k] <= hi);
+    }
+
+    // Optional "HH:MM"
+    function optTime(m, k) {
+      return !(k in m) || m[k] == null || (m[k] is string && m[k].matches('^([01][0-9]|2[0-3]):[0-5][0-9]$'));
+    }
+
+    function isDateKey(v) {
+      return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function validSleep(s) {
+      return s is map
+        && optTime(s, 'fellAsleep') && optTime(s, 'wokeUp')
+        && optInt(s, 'actualMinutes', 0, 1440)
+        && optInt(s, 'cycles', 0, 12)
+        && optInt(s, 'deepPct', 0, 100) && optInt(s, 'remPct', 0, 100) && optInt(s, 'lightPct', 0, 100)
+        && optInt(s, 'quality', 1, 10)
+        && optInt(s, 'deviceScore', 0, 100);
+    }
+
+    // One per day per type: id = "<date>_<type>"; every rating is 1–10
+    function validCheckin(id, d) {
+      return d.type in ['morning', 'evening']
+        && isDateKey(d.date)
+        && id == d.date + '_' + d.type
+        && optInt(d, 'mood', 1, 10) && optInt(d, 'energy', 1, 10) && optInt(d, 'dayRating', 1, 10)
+        && (!('sleep' in d) || d.sleep == null || validSleep(d.sleep))
+        && (!('intentions' in d) || (d.intentions is list && d.intentions.size() <= 3));
+    }
+
+    // Task stars are effort 1–5 (not a rating)
+    function validTask(d) {
+      return d.title is string && d.title.size() > 0 && d.title.size() <= 200
+        && d.stars is int && d.stars >= 1 && d.stars <= 5
+        && isDateKey(d.date)
+        && optTime(d, 'time')
+        && d.status in ['open', 'done']
+        && (!('priority' in d) || d.priority in ['low', 'normal', 'high']);
+    }
+
     // Profile + settings (theme, star values, PIN hash, reminder times…)
     match /users/{uid} {
       allow read, write: if isOwner(uid);
 
-      // tasks, categories, checkins, meditations, starEvents, rewards, goals,
-      // devices, pushTests …
+      match /checkins/{id} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && validCheckin(id, request.resource.data);
+      }
+
+      match /tasks/{id} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && validTask(request.resource.data);
+      }
+
+      // categories, meditations, starEvents, rewards, goals, devices, pushTests …
       match /{collection}/{docId} {
         allow read: if isOwner(uid);
-        // Weekly backups are written only by the server (Cloud Function)
-        allow write: if isOwner(uid) && collection != 'weeklySummaries';
+        // Weekly backups are written only by the server; checked collections have their own rules above
+        allow write: if isOwner(uid) && !(collection in ['weeklySummaries', 'checkins', 'tasks']);
       }
     }
 

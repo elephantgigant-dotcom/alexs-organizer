@@ -50,6 +50,11 @@ jobs:
       - name: Test the security rules
         run: npm run test:rules
 
+      - name: End-to-end smoke test
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+
       - name: Build
         run: npm run build
 
