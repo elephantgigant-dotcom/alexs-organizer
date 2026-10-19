@@ -16,6 +16,29 @@ window.addEventListener('beforeinstallprompt', (e) => {
   window.dispatchEvent(new Event('organizer-install-ready'))
 })
 
+// A code file of an older version is gone after a deploy (or the network is down):
+// reload once to get the current version instead of showing an error.
+window.addEventListener('vite:preloadError', (event) => {
+  const key = 'organizer-reloaded-for-chunk'
+  try {
+    if (sessionStorage.getItem(key) === '1' || !navigator.onLine) return
+    sessionStorage.setItem(key, '1')
+  } catch {
+    return
+  }
+  event.preventDefault()
+  window.location.reload()
+})
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    try {
+      sessionStorage.removeItem('organizer-reloaded-for-chunk')
+    } catch {
+      // fine
+    }
+  }, 10000)
+})
+
 // Offline support + "install to home screen". Only in the real (built) app.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {

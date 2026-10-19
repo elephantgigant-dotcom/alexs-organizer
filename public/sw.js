@@ -1,15 +1,24 @@
 // Service worker: makes the app installable and lets it open without internet.
-// - App files (/assets/…, icons) are cached the first time they load.
+// - On install it saves EVERY file of this version (list filled in by the build, see
+//   vite.config.js), so no screen or code file is missing offline or after a new deploy.
+// - App files (/assets/…, icons) not in the list are cached the first time they load.
 // - The font (Google Fonts) is cached too, so offline screens look the same.
 // - Pages: try the internet first, fall back to the saved copy when offline.
 // The data itself works offline thanks to Firestore's own cache on the device.
 // It also shows push notifications (reminders) sent by our Cloud Functions.
 
-const CACHE = 'alexs-organizer-v2'
+const VERSION = '__SW_VERSION__'
+const PRECACHE = [] /* __SW_PRECACHE__ */
+const CACHE = `alexs-organizer-${VERSION}`
 const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com']
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icons/icon-192.png'])))
+  event.waitUntil(
+    caches.open(CACHE).then((c) =>
+      // One by one, so a single failed file doesn't block the update
+      Promise.all(['/', '/manifest.webmanifest', ...PRECACHE].map((url) => c.add(url).catch((e) => console.warn('precache', url, e)))),
+    ),
+  )
   self.skipWaiting()
 })
 

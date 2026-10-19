@@ -38,7 +38,7 @@ function log(entry) {
 export async function sendTo(uid, { title, body, url = '/', tag }) {
   const devices = await db.collection(`users/${uid}/devices`).get()
   const tokens = devices.docs.map((d) => d.data().token).filter(Boolean)
-  if (!tokens.length) return { result: 'no device registered', sent: 0, devices: 0 }
+  if (!tokens.length) return { result: 'no device registered', sent: 0, devices: 0, errors: [] }
 
   // Data-only message: our service worker (public/sw.js) shows it.
   const res = await getMessaging().sendEachForMulticast({
@@ -48,20 +48,23 @@ export async function sendTo(uid, { title, body, url = '/', tag }) {
   })
 
   let expired = 0
+  const errors = []
   await Promise.all(
     res.responses.map(async (r, i) => {
       const code = r.error?.code
       if (code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-registration-token') {
         expired++
         await devices.docs[i].ref.delete()
+        errors.push({ device: devices.docs[i].data().name || devices.docs[i].id, code, message: 'expired token deleted' })
         log({ uid, result: 'expired token deleted', device: devices.docs[i].id })
       } else if (r.error) {
-        log({ uid, result: 'send error', device: devices.docs[i].id, code })
+        errors.push({ device: devices.docs[i].data().name || devices.docs[i].id, code, message: r.error.message })
+        log({ uid, result: 'send error', device: devices.docs[i].id, code, message: r.error.message })
       }
     }),
   )
   const result = res.successCount ? 'sent' : expired === tokens.length ? 'expired token deleted' : 'send error'
-  return { result, sent: res.successCount, devices: tokens.length }
+  return { result, sent: res.successCount, devices: tokens.length, errors }
 }
 
 // ── Every minute: reminders ──
@@ -108,7 +111,7 @@ export const reminders = onSchedule({ schedule: 'every 1 minutes', timeZone: 'Eu
           continue
         }
         const res = await sendTo(uid, { ...MESSAGES[r.type](settings), tag: r.type })
-        await logRef.update({ outcome: res.result, sent: res.sent, devices: res.devices })
+        await logRef.update({ outcome: res.result, sent: res.sent, devices: res.devices, errors: res.errors })
         log({ uid, type: r.type, ...res })
       }
     }
@@ -173,9 +176,15 @@ export const weeklyBackup = onSchedule({ schedule: '30 0 * * 1', timeZone: 'Euro
   }
 })
 
-// 🔧 "Send a test notification" from Settings (ignores sleep hours)
+// 🔧 "Send a test notification" from Settings (ignores sleep hours). The answer is written
+// back into the same document, so the app can show exactly what happened.
 export const onPushTest = onDocumentCreated({ document: 'users/{uid}/pushTests/{id}', database: DATABASE_ID }, async (event) => {
-  const res = await sendTo(event.params.uid, { title: 'Test notification', body: 'It works! Reminders will arrive on this device.', tag: 'test' })
+  let res
+  try {
+    res = await sendTo(event.params.uid, { title: 'Test notification', body: 'It works! Reminders will arrive on this device.', tag: 'test' })
+  } catch (e) {
+    res = { result: 'send error', sent: 0, devices: 0, errors: [{ code: e.code || 'error', message: e.message }] }
+  }
   log({ uid: event.params.uid, type: 'test', ...res })
-  await event.data.ref.delete()
+  await event.data.ref.update({ ...res, answeredAt: FieldValue.serverTimestamp() })
 })

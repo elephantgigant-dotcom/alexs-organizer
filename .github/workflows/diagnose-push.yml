@@ -1,0 +1,45 @@
+# Manual push diagnostics: function logs (reminders, onPushTest), registered devices,
+# test answers and reminder decisions. Read-only unless "send_test" is set to yes.
+# Actions tab → "Diagnose push" → Run workflow.
+
+name: Diagnose push
+
+on:
+  workflow_dispatch:
+    inputs:
+      send_test:
+        description: 'Also send a real test notification to every registered device (yes / no)'
+        default: 'no'
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm ci --prefix functions
+      - name: Key
+        env:
+          SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: echo "$SERVICE_ACCOUNT" > "$RUNNER_TEMP/sa.json"
+      - name: Database (devices, test answers, reminder decisions)
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+          SEND_TEST: ${{ github.event.inputs.send_test }}
+        run: node scripts/diagnose-push.mjs
+      - name: Function logs (last 6 hours)
+        run: |
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/sa.json" --quiet
+          echo "=== Errors and warnings: reminders, onPushTest, weeklyBackup ==="
+          gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name=("reminders" OR "onpushtest" OR "weeklybackup") AND severity>=WARNING' \
+            --project alexs-organizer --freshness=6h --limit 30 --format='value(timestamp,resource.labels.service_name,severity,textPayload,jsonPayload.message)'
+          echo "=== Reminder / test decisions ==="
+          gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name=("reminders" OR "onpushtest") AND textPayload:"\"event\":\"reminder\""' \
+            --project alexs-organizer --freshness=6h --limit 30 --format='value(timestamp,textPayload)'
+          echo "=== reminders runs in the last hour (HTTP status of each scheduled call) ==="
+          gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="reminders" AND log_id("run.googleapis.com/requests")' \
+            --project alexs-organizer --freshness=1h --limit 100 --format='value(httpRequest.status)' | sort | uniq -c
+      - if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"
