@@ -25,7 +25,10 @@ test('notification settings: one switch and time per reminder, sleep hours, save
   await page.reload()
   await expect(page.getByLabel('Morning check-in time')).toHaveValue('06:45')
   await expect(page.getByRole('switch', { name: 'Evening meditation' })).toHaveAttribute('aria-checked', 'false')
-  await expect(page.getByRole('button', { name: 'Allow notifications' })).toBeVisible()
+  // Not asked yet → an Allow button; blocked (some test browsers) → how to unblock it
+  const permission = await page.evaluate(() => Notification.permission)
+  if (permission === 'denied') await expect(page.getByText('Notifications are blocked for this app')).toBeVisible()
+  else await expect(page.getByRole('button', { name: 'Allow notifications' })).toBeVisible()
 })
 
 test.describe('installable app (built, with service worker)', () => {
