@@ -10,8 +10,11 @@ import { getMessaging } from 'firebase-admin/messaging'
 import { setGlobalOptions } from 'firebase-functions/v2'
 import { onDocumentCreated } from 'firebase-functions/v2/firestore'
 
+// Our database: the named one in europe-central2 (Warsaw), same id as in the app and firebase.json
+const DATABASE_ID = 'alexs-organizer'
+
 initializeApp()
-const db = getFirestore()
+const db = getFirestore(DATABASE_ID)
 
 // Same region as the database; one instance at most keeps costs tiny.
 setGlobalOptions({ region: 'europe-central2', maxInstances: 1 })
@@ -45,7 +48,7 @@ export async function sendTo(uid, { title, body, url = '/', tag }) {
 }
 
 // 🔧 "Send me a test notification" from Settings (ignores quiet hours)
-export const onPushTest = onDocumentCreated('users/{uid}/pushTests/{id}', async (event) => {
+export const onPushTest = onDocumentCreated({ document: 'users/{uid}/pushTests/{id}', database: DATABASE_ID }, async (event) => {
   await sendTo(event.params.uid, { title: '🔧 Test notification', body: 'It works! Reminders will arrive on this device.', tag: 'test' })
   await event.data.ref.delete()
 })

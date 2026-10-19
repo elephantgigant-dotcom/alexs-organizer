@@ -1,0 +1,26 @@
+# Manual, READ-ONLY: shows what is stored in each Firestore database (collections + counts).
+# Actions tab → "Check databases (read-only)" → Run workflow.
+
+name: Check databases (read-only)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Install
+        run: npm ci --prefix functions
+      - name: List collections and document counts
+        env:
+          SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          echo "$SERVICE_ACCOUNT" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          node scripts/check-databases.mjs
+          rm -f "$RUNNER_TEMP/sa.json"

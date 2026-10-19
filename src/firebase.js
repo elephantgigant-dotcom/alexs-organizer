@@ -8,7 +8,7 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
 } from 'firebase/firestore'
-import { firebaseConfig } from './firebase-config.js'
+import { DATABASE_ID, firebaseConfig } from './firebase-config.js'
 
 // For local testing we can run a fake Firebase on this computer ("emulators"):
 //   VITE_USE_EMULATORS=true npm run dev
@@ -28,9 +28,12 @@ export const auth = getAuth(app)
 
 // The database keeps a copy on the device, so the app opens instantly
 // and works offline; changes sync when the internet is back.
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-})
+// It is the NAMED database "alexs-organizer" in europe-central2 (Warsaw), not "(default)".
+export const db = initializeFirestore(
+  app,
+  { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) },
+  DATABASE_ID,
+)
 
 if (usingEmulators) {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })

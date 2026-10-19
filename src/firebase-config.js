@@ -15,3 +15,7 @@ export const firebaseConfig = {
 
 // The only Google account allowed in (also enforced by firestore.rules).
 export const OWNER_EMAIL = 'elephantgigant@gmail.com'
+
+// Our Firestore database: the named one in europe-central2 (Warsaw). Never "(default)".
+// Same id in firebase.json and functions/index.js.
+export const DATABASE_ID = 'alexs-organizer'

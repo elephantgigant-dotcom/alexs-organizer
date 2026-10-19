@@ -13,6 +13,10 @@
   1–10 axis; averages show one decimal. Task stars stay 1–5 (effort, not a rating).
 
 ## Firestore
+Database: the **named** database `alexs-organizer` in `europe-central2` (Warsaw), used by the app
+(`src/firebase-config.js` → `DATABASE_ID`), the rules deploy (`firebase.json`) and the Cloud Functions.
+The `(default)` database is not used.
+
 ```
 users/{uid}                     profile + settings
   email, balance (stars), createdAt
