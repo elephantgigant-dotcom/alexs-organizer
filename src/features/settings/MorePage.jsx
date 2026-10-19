@@ -33,6 +33,8 @@ export function MorePage() {
         <div className="mx-4 border-t border-line" />
         <Row icon="star" title="Stars, meditation, sleep" sub={`Meditation ${settings.meditation.morningMin}/${settings.meditation.eveningMin} min · sleep target ${Math.floor(settings.sleep.targetMin / 60)} h ${settings.sleep.targetMin % 60} min`} onClick={() => navigate('/more/values')} />
         <div className="mx-4 border-t border-line" />
+        <Row icon="download" title="Export" sub="JSON for Claude, CSV for spreadsheets" onClick={() => navigate('/more/export')} />
+        <div className="mx-4 border-t border-line" />
         <Row icon="tag" title="Areas of life" sub={`${categories.length} categories`} onClick={() => navigate('/more/categories')} />
         <div className="mx-4 border-t border-line" />
         <Row icon="lock" title="PIN lock" sub={settings.pin ? `On · locks after ${lockLabel(settings.autoLockMin)}` : 'Off'} onClick={() => navigate('/more/pin')} />

@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:rules": "firebase emulators:exec --only firestore --project demo-alexs-organizer \"vitest run --config vitest.rules.config.js\"",
     "emulators": "firebase emulators:start --project demo-alexs-organizer",
-    "test:e2e": "firebase emulators:exec --only auth,firestore --project demo-alexs-organizer \"playwright test\""
+    "test:e2e": "firebase emulators:exec --only auth,firestore --project demo-alexs-organizer \"playwright test\"",
+    "sync:shared": "cp src/lib/dates.js src/lib/sleepScore.js functions/shared/"
   },
   "dependencies": {
     "firebase": "^13.0.0",

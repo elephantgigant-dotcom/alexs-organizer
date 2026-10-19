@@ -71,7 +71,8 @@ users/{uid}/goals/{id}          title, target (stars earned), period 'week'|'mon
 
 users/{uid}/devices/{id}        push token per device (Pixel, desktop)
 users/{uid}/pushTests/{id}      "send me a test notification"
-users/{uid}/weeklySummaries/{weekMonday}   written by the server only (weekly backup)
+users/{uid}/weeklySummaries/{weekMonday}   written by the server only: the weekly backup
+                                (Cloud Function weeklyBackup, Monday 00:30 Warsaw, functions/summary.js)
 ```
 
 ## Screens (bottom menu: Today · Week · Stars · Stats · More)

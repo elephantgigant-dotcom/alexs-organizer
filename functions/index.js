@@ -1,14 +1,19 @@
 // ─────────────────────────────────────────────────────────────
 // Cloud Functions: push notifications, reminders and weekly backup.
-// Stage 0: only the test notification. Reminders + backup arrive in stages 4–5.
+//  • weeklyBackup (Monday 00:30 Warsaw): compact summary of the past week
+//    → users/{uid}/weeklySummaries/{monday}   (see summary.js)
+// Reminders arrive in stage 5.
 // Phones/computers are listed in users/{uid}/devices.
 // ─────────────────────────────────────────────────────────────
 
 import { initializeApp } from 'firebase-admin/app'
-import { getFirestore } from 'firebase-admin/firestore'
+import { FieldValue, getFirestore } from 'firebase-admin/firestore'
 import { getMessaging } from 'firebase-admin/messaging'
 import { setGlobalOptions } from 'firebase-functions/v2'
 import { onDocumentCreated } from 'firebase-functions/v2/firestore'
+import { onSchedule } from 'firebase-functions/v2/scheduler'
+import { addDaysKey } from './shared/dates.js'
+import { previousWeek, weeklySummary } from './summary.js'
 
 // Our database: the named one in europe-central2 (Warsaw), same id as in the app and firebase.json
 const DATABASE_ID = 'alexs-organizer'
@@ -51,4 +56,31 @@ export async function sendTo(uid, { title, body, url = '/', tag }) {
 export const onPushTest = onDocumentCreated({ document: 'users/{uid}/pushTests/{id}', database: DATABASE_ID }, async (event) => {
   await sendTo(event.params.uid, { title: '🔧 Test notification', body: 'It works! Reminders will arrive on this device.', tag: 'test' })
   await event.data.ref.delete()
+})
+
+// 💾 Weekly backup: every Monday at 00:30 (Warsaw), one compact summary doc per user
+export const weeklyBackup = onSchedule({ schedule: '30 0 * * 1', timeZone: 'Europe/Warsaw' }, async () => {
+  const { from, to } = previousWeek()
+  const users = await db.collection('users').get()
+  for (const user of users.docs) {
+    const inWeek = (name, start = from) => user.ref.collection(name).where('date', '>=', start).where('date', '<=', to).get()
+    const [tasks, checkins, meditations, starEvents] = await Promise.all([
+      inWeek('tasks'),
+      inWeek('checkins', addDaysKey(from, -8)),
+      inWeek('meditations'),
+      inWeek('starEvents'),
+    ])
+    const data = (snap) => snap.docs.map((d) => d.data())
+    const summary = weeklySummary({
+      from,
+      to,
+      settings: user.data().settings,
+      tasks: data(tasks),
+      checkins: data(checkins),
+      meditations: data(meditations),
+      starEvents: data(starEvents),
+    })
+    await user.ref.collection('weeklySummaries').doc(from).set({ ...summary, createdAt: FieldValue.serverTimestamp() })
+    console.log(`weekly backup ${from} → ${user.id}`)
+  }
 })
