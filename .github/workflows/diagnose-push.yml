@@ -36,10 +36,16 @@ jobs:
           gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name=("reminders" OR "onpushtest" OR "weeklybackup") AND severity>=WARNING' \
             --project alexs-organizer --freshness=6h --limit 30 --format='value(timestamp,resource.labels.service_name,severity,textPayload,jsonPayload.message)'
           echo "=== Reminder / test decisions ==="
-          gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name=("reminders" OR "onpushtest") AND textPayload:"\"event\":\"reminder\""' \
-            --project alexs-organizer --freshness=6h --limit 30 --format='value(timestamp,textPayload)'
+          gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name=("reminders" OR "onpushtest") AND jsonPayload.event="reminder"' \
+            --project alexs-organizer --freshness=6h --limit 30 --format='value(timestamp,jsonPayload.type,jsonPayload.result,jsonPayload.sent,jsonPayload.devices,jsonPayload.code)'
           echo "=== reminders runs in the last hour (HTTP status of each scheduled call) ==="
           gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="reminders" AND log_id("run.googleapis.com/requests")' \
             --project alexs-organizer --freshness=1h --limit 100 --format='value(httpRequest.status)' | sort | uniq -c
+      - name: Services push registration needs
+        run: |
+          echo "=== Enabled APIs (push registration needs FCM Registration + Firebase Installations) ==="
+          gcloud services list --enabled --project alexs-organizer --format='value(config.name)' | grep -E 'fcm|messaging|installations|firebase' || true
+          echo "=== Browser API keys and their restrictions ==="
+          gcloud services api-keys list --project alexs-organizer --format=json | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{for(const k of JSON.parse(s)){console.log('-',k.displayName,'|',JSON.stringify(k.restrictions||'no restrictions'))}})" || true
       - if: always()
         run: rm -f "$RUNNER_TEMP/sa.json"
