@@ -10,7 +10,7 @@ const all = async (q) => (await getDocs(q)).docs.map((d) => ({ id: d.id, ...d.da
 const inRange = (uid, name, from, to) => query(col(uid, name), where('date', '>=', from), where('date', '<=', to))
 
 export async function loadExport(uid, from, to, settings) {
-  const [tasks, checkins, meditations, starEvents, categories, rewards, goals, olderMornings] = await Promise.all([
+  const [tasks, checkins, meditations, starEvents, categories, rewards, goals, olderMornings, fitnessDays, fitnessExercises] = await Promise.all([
     all(inRange(uid, 'tasks', from, to)),
     all(inRange(uid, 'checkins', from, to)),
     all(inRange(uid, 'meditations', from, to)),
@@ -20,6 +20,8 @@ export async function loadExport(uid, from, to, settings) {
     all(col(uid, 'goals')),
     // the week before the range, so the first nights' sleep scores know the usual bedtime
     all(query(col(uid, 'checkins'), where('date', '>=', addDaysKey(from, -8)), where('date', '<', from))),
+    all(inRange(uid, 'fitnessDays', from, to)),
+    all(col(uid, 'fitnessExercises')),
   ])
   const exp = buildExport({
     from,
@@ -33,6 +35,8 @@ export async function loadExport(uid, from, to, settings) {
     categories,
     rewards,
     goals,
+    fitnessDays,
+    fitnessExercises,
   })
   // The extra week only helps the scores; it is not part of the exported records
   exp.data.checkins = exp.data.checkins.filter((c) => c.date >= from)

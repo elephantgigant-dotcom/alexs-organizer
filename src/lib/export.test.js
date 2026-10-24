@@ -78,3 +78,60 @@ describe('CSV', () => {
     expect(csvFor(exp, 'sleepNights').split('\r\n')[0]).toContain('score_duration')
   })
 })
+
+describe('fitness in the export', () => {
+  const at = (hhmm) => new Date(`2026-10-26T${hhmm}:00+01:00`).getTime() // Warsaw winter time
+  const ex = { name: 'Push-ups', emoji: '💪', unit: 'reps', customUnit: '', target: 10, order: 0 }
+  const session = (n, status, time, done) => ({ n, status, source: 'server', scheduledAt: at(time), completedAt: status === 'done' ? at(time) + 600000 : null, pushes: 1, exercises: { pushups: { ...ex, done } } })
+  const day = (date, sessions) => ({ date, sessions: Object.fromEntries(sessions.map((s) => [s.n, s])) })
+  const full = Array.from({ length: 8 }, (_, i) => session(i + 1, 'done', `${String(8 + i).padStart(2, '0')}:00`, 10))
+  const exp = buildExport({
+    ...input,
+    from: '2026-10-25',
+    to: '2026-10-26',
+    exportedAt: '2026-10-26T20:00:00.000Z',
+    fitnessDays: [
+      { ...day('2026-10-25', full), starsPaid: true },
+      { ...day('2026-10-26', [session(1, 'done', '08:00', 12), session(2, 'skipped', '09:40', 0), session(3, 'missed', '11:20', 0)]), daily: { cycling: { name: 'Cycling', emoji: '🚴', unit: 'minutes', target: 30, done: 20, order: 0 } } },
+    ],
+    fitnessExercises: [
+      { id: 'pushups', ...ex, frequency: 'session', targets: [{ value: 10, from: '2026-10-25' }, { value: 12, from: '2026-10-26' }] },
+      { id: 'cycling', name: 'Cycling', emoji: '🚴', unit: 'minutes', frequency: 'daily', order: 1, targets: [{ value: 30, from: '2026-10-25' }] },
+    ],
+  })
+
+  it('summary: sessions, complete days, streak, totals per exercise', () => {
+    expect(exp.summary.fitness).toMatchObject({ challengeDays: 2, sessionsDone: 9, sessionsPlanned: 16, completionRate: 56.3, skipped: 1, missed: 1, completeDays: 1, streak: { current: 1, best: 1 } })
+    expect(exp.summary.fitness.totals).toEqual([
+      { exercise: 'Push-ups', unit: 'reps', total: 92 },
+      { exercise: 'Cycling', unit: 'min', total: 20 },
+    ])
+  })
+
+  it('one row per session and exercise, Warsaw clock times', () => {
+    const rows = exp.data.fitnessSessions.filter((r) => r.date === '2026-10-26')
+    expect(rows).toEqual([
+      { date: '2026-10-26', challengeDay: 2, session: 1, status: 'done', startedBy: 'reminder', scheduledAt: '08:00', completedAt: '08:10', pushes: 1, exercise: 'Push-ups', unit: 'reps', target: 10, done: 12 },
+      { date: '2026-10-26', challengeDay: 2, session: 2, status: 'skipped', startedBy: 'reminder', scheduledAt: '09:40', completedAt: '', pushes: 1, exercise: 'Push-ups', unit: 'reps', target: 10, done: 0 },
+      { date: '2026-10-26', challengeDay: 2, session: 3, status: 'missed', startedBy: 'reminder', scheduledAt: '11:20', completedAt: '', pushes: 1, exercise: 'Push-ups', unit: 'reps', target: 10, done: 0 },
+    ])
+    expect(exp.data.fitnessDays).toEqual([
+      { date: '2026-10-25', challengeDay: 1, done: 8, skipped: 0, missed: 0, complete: true, starsPaid: true },
+      { date: '2026-10-26', challengeDay: 2, done: 1, skipped: 1, missed: 1, complete: false, starsPaid: false },
+    ])
+    expect(exp.data.fitnessDaily).toEqual([{ date: '2026-10-26', exercise: 'Cycling', unit: 'min', target: 30, done: 20, reached: false }])
+  })
+
+  it('exercises with their target history; CSV files and the brief', () => {
+    expect(exp.data.fitnessExercises[0]).toMatchObject({ name: 'Push-ups', frequency: 'every session', currentTarget: 12, targetHistory: '10 from 2026-10-25; 12 from 2026-10-26' })
+    expect(csvFor(exp, 'fitnessSessions').split('\r\n')[0]).toBe('date,challengeDay,session,status,startedBy,scheduledAt,completedAt,pushes,exercise,unit,target,done')
+    expect(csvFor(exp, 'fitnessExercises')).toContain('10 from 2026-10-25; 12 from 2026-10-26')
+    expect(JSON.stringify(exp.analysisBrief)).toContain('Fitness: sessions done per day vs mood')
+  })
+
+  it('an export without fitness data still works', () => {
+    const plain = buildExport(input)
+    expect(plain.summary.fitness).toMatchObject({ challengeDays: 0, sessionsDone: 0, completionRate: null })
+    expect(csvFor(plain, 'fitnessSessions')).toBe('')
+  })
+})

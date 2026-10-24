@@ -178,6 +178,28 @@ describe('notifications', () => {
   })
 })
 
+describe('fitness', () => {
+  const ex = (extra = {}) => ({ name: 'Push-ups', emoji: '💪', unit: 'reps', customUnit: '', step: 1, frequency: 'session', enabled: true, archived: false, order: 0, targets: [{ value: 10, from: '2026-10-25' }], ...extra })
+  it('exercises: valid ones only, archive instead of delete', async () => {
+    const ref = doc(alex(), 'users', ALEX, 'fitnessExercises', 'pushups')
+    await assertSucceeds(setDoc(ref, ex()))
+    await assertSucceeds(setDoc(ref, ex({ archived: true })))
+    await assertFails(setDoc(ref, ex({ unit: 'parsecs' })))
+    await assertFails(setDoc(ref, ex({ frequency: 'hourly' })))
+    await assertFails(setDoc(ref, ex({ targets: [] })))
+    await assertFails(setDoc(ref, ex({ step: 0 })))
+    await assertFails(deleteDoc(ref))
+  })
+  it('days: the id is the date; never deleted; others locked out', async () => {
+    const ref = doc(alex(), 'users', ALEX, 'fitnessDays', '2026-10-25')
+    await assertSucceeds(setDoc(ref, { date: '2026-10-25', sessions: { 1: { n: 1, status: 'done', completedAt: 1 } } }))
+    await assertFails(setDoc(doc(alex(), 'users', ALEX, 'fitnessDays', '2026-10-26'), { date: '2026-10-25' }))
+    await assertFails(deleteDoc(ref))
+    const other = as('other', { email: 'someone@gmail.com', email_verified: true })
+    await assertFails(getDoc(doc(other, 'users', ALEX, 'fitnessDays', '2026-10-25')))
+  })
+})
+
 describe('everyone else', () => {
   it('another Google account sees nothing, even in its own folder', async () => {
     const other = as('other', { email: 'someone@gmail.com', email_verified: true })

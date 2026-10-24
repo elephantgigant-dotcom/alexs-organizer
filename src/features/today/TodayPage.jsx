@@ -10,6 +10,8 @@ import { formatClock, remainingMs } from '../../lib/meditation.js'
 import { formatDuration } from '../../lib/sleep.js'
 import { sleepScore, sleepTargets, weekComparison } from '../../lib/sleepScore.js'
 import { useNow } from '../meditation/timerState.js'
+import { useToday } from '../../app/useToday.js'
+import { FitnessCard } from '../fitness/FitnessCard.jsx'
 import { watchTasksInRange } from '../../services/tasks.js'
 import { EmptyState, PageTitle, SectionTitle } from '../../ui/basics.jsx'
 import { Icon } from '../../ui/Icons.jsx'
@@ -22,14 +24,7 @@ function greeting(hour) {
   return 'Good evening'
 }
 
-export function useToday() {
-  const [today, setToday] = useState(todayKey)
-  useEffect(() => {
-    const t = setInterval(() => setToday(todayKey()), 60000)
-    return () => clearInterval(t)
-  }, [])
-  return today
-}
+export { useToday }
 
 export function TodayPage() {
   const { uid, openTasks, balance } = useData()
@@ -67,6 +62,7 @@ export function TodayPage() {
         {greeting(warsawParts().hh)}
       </PageTitle>
 
+      <FitnessCard />
       <ActiveMeditation />
       <DayCards today={today} evening={evening} />
       <SleepScoreCard today={today} />

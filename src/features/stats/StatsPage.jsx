@@ -7,6 +7,7 @@ import { Link } from 'react-router'
 import { useData } from '../../app/DataContext.jsx'
 import { slotColor } from '../../lib/colors.js'
 import { addDaysKey, formatShortDate, rangeKeys, todayKey, WEEKDAYS_SHORT, weekdayOf } from '../../lib/dates.js'
+import { fitnessPeriod, fitnessStreaks, ordered, unitLabel } from '../../lib/fitness.js'
 import { formatDuration } from '../../lib/sleep.js'
 import { averageBedtime, fromNightMinutes, HOW_CALCULATED, nightMinutes, sleepTargets } from '../../lib/sleepScore.js'
 import {
@@ -26,9 +27,11 @@ import {
   streakInfo,
   taskStats,
 } from '../../lib/stats.js'
+import { watchDays } from '../../services/fitness.js'
 import { watchTasksInRange } from '../../services/tasks.js'
 import { PageTitle, Segmented } from '../../ui/basics.jsx'
 import { BarChart, ChartCard, HBars, LineChart, StackedBars } from '../../ui/charts/Charts.jsx'
+import { useFitness } from '../fitness/FitnessContext.jsx'
 
 const C = { mood: 'var(--c1)', energy: 'var(--c2)', calc: 'var(--c1)', device: 'var(--c2)', bed: 'var(--c1)', wake: 'var(--c2)' }
 const STAGES = [
@@ -43,6 +46,10 @@ export function StatsPage() {
   const [period, setPeriod] = useState('week')
   const [tasks, setTasks] = useState([])
   useEffect(() => watchTasksInRange(uid, addDaysKey(today, -97), today, setTasks), [uid, today])
+  const fitness = useFitness()
+  const [fitnessDays, setFitnessDays] = useState({})
+  useEffect(() => watchDays(uid, addDaysKey(today, -97), today, setFitnessDays), [uid, today])
+  const allFitnessDays = useMemo(() => ({ ...fitnessDays, [fitness.today]: fitness.day }), [fitnessDays, fitness.today, fitness.day])
 
   const targets = useMemo(() => sleepTargets(settings), [settings])
   const byDate = useMemo(() => checkinsByDate(checkins), [checkins])
@@ -88,7 +95,18 @@ export function StatsPage() {
       <h2 className="m-0 mt-1 text-xl font-extrabold">Tasks</h2>
       <TasksChart labels={labels} bks={bks} tasks={tasks} days={days} />
       <AreasChart tasks={tasks} days={days} catById={catById} />
-      <Streaks today={today} taskDays={taskDays} meditationDays={meditationDays} checkinDays={checkinDays} />
+
+      <h2 className="m-0 mt-1 text-xl font-extrabold">Fitness challenge</h2>
+      {today < fitness.f.startDate ? (
+        <p className="m-0 text-[15px] text-muted">The challenge starts on {formatShortDate(fitness.f.startDate)}. Its charts appear here from then on.</p>
+      ) : (
+        <>
+          <FitnessSessionsChart labels={labels} bks={bks} f={fitness.f} days={allFitnessDays} today={today} />
+          <FitnessExercisesChart f={fitness.f} days={allFitnessDays} dates={days} today={today} exercises={fitness.exercises} />
+        </>
+      )}
+
+      <Streaks today={today} taskDays={taskDays} meditationDays={meditationDays} checkinDays={checkinDays} fitness={fitnessStreaks(allFitnessDays, fitness.f, today)} />
     </div>
   )
 }
@@ -392,14 +410,15 @@ function AreasChart({ tasks, days, catById }) {
   )
 }
 
-function Streaks({ today, taskDays, meditationDays, checkinDays }) {
+function Streaks({ today, taskDays, meditationDays, checkinDays, fitness }) {
   const rows = [
     ['Tasks', streakInfo(taskDays, today)],
     ['Meditation', streakInfo(meditationDays, today)],
     ['Check-ins', streakInfo(checkinDays, today)],
+    ['Fitness (8/8 days)', fitness],
   ]
   return (
-    <ChartCard title="Streaks" readout="Days in a row with at least one.">
+    <ChartCard title="Streaks" readout="Days in a row with at least one (fitness: only complete days).">
       <div className="flex flex-col">
         {rows.map(([label, s], i) => (
           <div key={label} className={`flex min-h-12 items-center justify-between ${i ? 'border-t border-line' : ''}`}>
@@ -410,6 +429,71 @@ function Streaks({ today, taskDays, meditationDays, checkinDays }) {
           </div>
         ))}
       </div>
+    </ChartCard>
+  )
+}
+
+// ── Fitness challenge ──
+
+function FitnessSessionsChart({ labels, bks, f, days, today }) {
+  const [active, setActive] = useState(null)
+  // Per bucket: sessions done per challenge day (a day bucket = that day, a week = its average)
+  const per = bks.map((b) => {
+    const p = fitnessPeriod(days, b.days, f, today)
+    return { ...p, value: p.days.length ? p.done / p.days.length : null }
+  })
+  const all = fitnessPeriod(days, bks.flatMap((b) => b.days), f, today)
+  const max = f.sessionsPerDay
+  const name = (i) => `${bucketName(bks[i])}: ${per[i].days.length ? `${fmt1(per[i].value)} of ${f.sessionsPerDay} sessions${bks[i].days.length > 1 ? ' a day' : ''}` : 'not a challenge day'}`
+  return (
+    <ChartCard
+      title="Sessions done"
+      summary={all.days.length ? `${all.done} of ${all.planned} · ${all.complete} complete ${all.complete === 1 ? 'day' : 'days'}` : 'No challenge days in this period'}
+      readout={active != null ? name(active) : 'Tap a bar for the numbers. The line is a complete day.'}
+      table={{
+        columns: ['Day', 'Done', 'Skipped', 'Missed'],
+        rows: bks.flatMap((b) => fitnessPeriod(days, b.days, f, today).days.map((d) => [`${WEEKDAYS_SHORT[weekdayOf(d.date)]} ${formatShortDate(d.date)}`, d.done, d.skipped, d.missed])),
+      }}
+    >
+      <BarChart
+        labels={labels}
+        values={per.map((p) => p.value)}
+        max={max}
+        target={{ value: f.sessionsPerDay, label: `${f.sessionsPerDay}/${f.sessionsPerDay}` }}
+        ticks={[
+          { v: 0, label: '0' },
+          { v: Math.round(max / 2), label: String(Math.round(max / 2)) },
+          { v: max, label: String(max) },
+        ]}
+        active={active}
+        onActive={setActive}
+        ariaLabel="Fitness sessions done per day"
+      />
+    </ChartCard>
+  )
+}
+
+function FitnessExercisesChart({ f, days, dates, today, exercises }) {
+  const { totals } = fitnessPeriod(days, dates, f, today)
+  const byId = Object.fromEntries(exercises.map((e) => [e.id, e]))
+  const rows = ordered(Object.fromEntries(Object.keys(totals).map((id) => [id, { order: 99, ...byId[id], name: byId[id]?.name || id, total: totals[id] }])))
+    .map(([, r]) => r)
+    .filter((r) => r.total > 0)
+    .map((r, i) => ({
+      label: `${r.emoji || ''} ${r.name}`.trim(),
+      value: r.total,
+      display: String(r.total),
+      unit: r.unit ? unitLabel(r, r.total) : '',
+      color: `var(--c${(i % 8) + 1})`,
+    }))
+  const max = Math.max(1, ...rows.map((r) => r.value))
+  return (
+    <ChartCard
+      title="Per exercise"
+      readout={rows.length ? 'Total in this period (sessions and once a day together).' : 'Nothing done in this period yet.'}
+      table={rows.length ? { columns: ['Exercise', 'Total', 'Unit'], rows: rows.map((r) => [r.label, r.value, r.unit]) } : undefined}
+    >
+      <HBars rows={rows} max={max} />
     </ChartCard>
   )
 }

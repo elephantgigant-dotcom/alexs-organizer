@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config'
 //   npm run test:rules
 export default defineConfig({
   test: {
-    include: ['tests/**/*.rules.test.js'],
+    include: ['tests/**/*.test.js'],
     testTimeout: 20000,
     fileParallelism: false,
   },

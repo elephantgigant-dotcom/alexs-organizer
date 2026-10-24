@@ -8,6 +8,8 @@ import { Layout } from './app/Layout.jsx'
 import { Centered, LoginPage, NotAllowed } from './features/auth/LoginPage.jsx'
 import { CheckinPage } from './features/checkins/CheckinPage.jsx'
 import { JournalPage } from './features/checkins/JournalPage.jsx'
+import { FitnessProvider } from './features/fitness/FitnessContext.jsx'
+import { FitnessPage } from './features/fitness/FitnessPage.jsx'
 import { MeditatePage } from './features/meditation/MeditatePage.jsx'
 import { MeditationPrompt } from './features/meditation/MeditationPrompt.jsx'
 import { ValuesPage } from './features/settings/ValuesPage.jsx'
@@ -54,25 +56,28 @@ function Gate() {
         <PinResetAfterLogin />
         <MeditationPrompt />
         <TaskSheetProvider>
-          <Routes>
-            <Route path="checkin/:type" element={<CheckinPage />} />
-            <Route path="meditate" element={<MeditatePage />} />
-            <Route element={<Layout />}>
-              <Route index element={<TodayPage />} />
-              <Route path="week" element={<WeekPage />} />
-              <Route path="stars" element={<StarsPage />} />
-              <Route path="stats" element={<StatsPage />} />
-              <Route path="more" element={<MorePage />} />
-              <Route path="more/categories" element={<CategoriesPage />} />
-              <Route path="more/pin" element={<PinPage />} />
-              <Route path="more/values" element={<ValuesPage />} />
-              <Route path="journal" element={<JournalPage />} />
-              <Route path="more/export" element={<ExportPage />} />
-              <Route path="more/notifications" element={<NotificationsPage />} />
-              <Route path="stats/review" element={<WeeklyReviewPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Route>
-          </Routes>
+          <FitnessProvider>
+            <Routes>
+              <Route path="checkin/:type" element={<CheckinPage />} />
+              <Route path="meditate" element={<MeditatePage />} />
+              <Route element={<Layout />}>
+                <Route index element={<TodayPage />} />
+                <Route path="week" element={<WeekPage />} />
+                <Route path="stars" element={<StarsPage />} />
+                <Route path="stats" element={<StatsPage />} />
+                <Route path="more" element={<MorePage />} />
+                <Route path="more/categories" element={<CategoriesPage />} />
+                <Route path="more/pin" element={<PinPage />} />
+                <Route path="more/values" element={<ValuesPage />} />
+                <Route path="journal" element={<JournalPage />} />
+                <Route path="more/export" element={<ExportPage />} />
+                <Route path="more/fitness" element={<FitnessPage />} />
+                <Route path="more/notifications" element={<NotificationsPage />} />
+                <Route path="stats/review" element={<WeeklyReviewPage />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Route>
+            </Routes>
+          </FitnessProvider>
         </TaskSheetProvider>
       </PinGate>
     </DataProvider>

@@ -36,6 +36,11 @@ users/{uid}                     profile + settings
       weeklyReview: { on, time: '19:00' },                      // Sundays
       taskDue: { on, leadMin: 15 }, meditationEnd: { on },
       quietHours: { on, start: '23:00', end: '07:00' },         // sleep hours: nothing is sent
+      fitnessSessions: { on }, fitnessSummary: { on },
+    },
+    fitness: {                                                 // src/lib/fitness.js DEFAULT_FITNESS
+      sessionsPerDay: 8, startTime: '08:00', endTime: '21:00', intervalMin: 90, nagMin: 15,
+      maxPushes: 3, lengthDays: 30, startDate: '2026-10-25', bell: true, dayStars: 20,
     },
   }
 
@@ -61,12 +66,28 @@ users/{uid}/meditations/{id}    slot 'morning'|'evening', date, plannedMin 5–3
                                 endsAt (ms, the timer is timestamp-based), remainingMs (while paused),
                                 status 'running'|'paused'|'done'|'cancelled', completedAt, stars
 
-users/{uid}/starEvents/{id}     amount (+/−), type 'task'|'checkin'|'meditation'|'streak'|'redeem'|'undo',
+users/{uid}/starEvents/{id}     amount (+/−), type 'task'|'checkin'|'meditation'|'streak'|'fitness'|'redeem'|'undo',
                                 refId, note, date, createdAt
 
 users/{uid}/rewards/{id}        title, emoji, price          default: "Play a video game I want" = 500
 users/{uid}/goals/{id}          title, target (stars earned), period 'week'|'month'|'custom',
                                 from?, to?  (progress = stars earned in that period)
+
+users/{uid}/fitnessExercises/{id}   name, emoji, unit ('reps'|'glasses'|'minutes'|'km'|… |'custom'),
+                                customUnit, step, frequency 'session'|'daily', enabled, archived, order,
+                                targets [{ value, from: date }]   (a change is added from today on),
+                                autoIncrease { on, add, everyDays, from }    never deleted (archived)
+users/{uid}/fitnessDays/{date}  date, daily { exId: { name, emoji, unit, target, done, completedAt } },
+                                sessions { n: { n, status 'pending'|'done'|'skipped'|'missed',
+                                  source 'server'|'manual', scheduledAt, pushes, lastPushAt,
+                                  completedAt, missedAt, exercises { exId: { name, emoji, unit,
+                                  target, done, order } } } },
+                                result { done, skipped, missed, sessions }, summarySentAt, starsPaid
+                                → the schedule (reminder, nags, missed, summary, 20 stars) is decided
+                                  by the Cloud Function `reminders` every minute (functions/fitness.js),
+                                  in a transaction, so it is idempotent; the app writes amounts,
+                                  Done, Skip and "Do it now"; the notification's Done button writes
+                                  through the Firestore REST API from the service worker
 
 users/{uid}/devices/{id}        push token per device (Pixel, desktop)
 users/{uid}/reminderLog/{date}_{type}   server only: one decision per reminder per day
@@ -100,14 +121,22 @@ users/{uid}/weeklySummaries/{weekMonday}   written by the server only: the weekl
      with the target line, Deep / REM / Light stacked bars, fell-asleep and wake-up times,
      sleep vs next-day mood and energy (nights at/above vs below target).
    - Mood and energy (1–10), tasks per day, per category, streaks.
+   - Fitness challenge: sessions done per day (with the 8/8 line), per-exercise totals,
+     the 8/8-day streak.
    - **Weekly review**: what went well, what slipped.
-10. **More / Settings**: theme (System / Light / Dark), star values, meditation lengths,
+10. **Fitness challenge** (More → Fitness challenge, and a card at the top of Today): the open
+    session's counters (− / + / tick / Edit), Done and Skip, a countdown ring to the next session,
+    once-a-day rows, "Day complete"; the page has challenge day, streaks, the month grid, totals,
+    exercises (add, suggestions, reorder, enable, archive), settings and a test reminder.
+11. **More / Settings**: theme (System / Light / Dark), star values, meditation lengths,
     categories, reminders and quiet hours, PIN and auto-lock, Export, install, sign out, version.
-11. **Export**: date range → JSON (starts with the analysis brief) + CSV. Includes every sleep
+12. **Export**: date range → JSON (starts with the analysis brief) + CSV. Includes every sleep
     field plus the calculated sleep score and its parts. The brief says ratings are 1–10 and asks
     to look at: sleep stages vs next-day mood and energy, fall-asleep consistency vs mood,
     cycles / duration vs productivity, calculated vs device sleep score, mood vs sleep,
-    meditation vs mood, completion by weekday, streak breaks, trends, what to improve.
+    meditation vs mood, completion by weekday, streak breaks, trends, what to improve,
+    fitness vs mood / energy / sleep. Fitness CSVs: days, sessions (one row per exercise),
+    once-a-day, exercises with their target history.
 
 ## Sleep score (0–100, `src/lib/sleepScore.js`, not medical advice)
 | Part | Points | Full points when |

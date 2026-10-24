@@ -68,7 +68,7 @@ service cloud.firestore {
     // so writing the same payout twice is rejected and the batch (balance included) fails.
     function validStarEvent(d) {
       return d.amount is int && d.amount >= -100000 && d.amount <= 1000
-        && d.type in ['task', 'checkin', 'meditation', 'streak', 'redeem', 'adjust']
+        && d.type in ['task', 'checkin', 'meditation', 'streak', 'redeem', 'adjust', 'fitness']
         && isDateKey(d.date);
     }
 
@@ -90,6 +90,16 @@ service cloud.firestore {
       return d.title is string && d.title.size() > 0 && d.title.size() <= 120
         && d.target is int && d.target >= 1 && d.target <= 100000
         && d.period in ['week', 'month', 'total'];
+    }
+
+    // Fitness: an exercise and its target history (never deleted, only archived)
+    function validExercise(d) {
+      return d.name is string && d.name.size() > 0 && d.name.size() <= 60
+        && d.unit in ['reps', 'glasses', 'ml', 'minutes', 'km', 'custom']
+        && d.frequency in ['session', 'daily']
+        && (d.step is int || d.step is float) && d.step > 0
+        && d.targets is list && d.targets.size() >= 1
+        && d.enabled is bool && d.archived is bool;
     }
 
     // Profile + settings (theme, star values, PIN hash, reminder times…)
@@ -127,12 +137,26 @@ service cloud.firestore {
         allow create, update: if isOwner(uid) && validGoal(request.resource.data);
       }
 
+      match /fitnessExercises/{id} {
+        allow read: if isOwner(uid);
+        allow create, update: if isOwner(uid) && validExercise(request.resource.data);
+        allow delete: if false; // archive instead, so history stays
+      }
+
+      // One document per day; its id is the date
+      match /fitnessDays/{date} {
+        allow read: if isOwner(uid);
+        allow create, update: if isOwner(uid) && isDateKey(date) && request.resource.data.date == date
+          && (!('sessions' in request.resource.data) || request.resource.data.sessions is map);
+        allow delete: if false;
+      }
+
       // categories, devices, pushTests …
       match /{collection}/{docId} {
         allow read: if isOwner(uid);
         // Weekly backups and the reminder log are written only by the server;
         // checked collections have their own rules above
-        allow write: if isOwner(uid) && !(collection in ['weeklySummaries', 'reminderLog', 'checkins', 'tasks', 'starEvents', 'meditations', 'rewards', 'goals']);
+        allow write: if isOwner(uid) && !(collection in ['weeklySummaries', 'reminderLog', 'checkins', 'tasks', 'starEvents', 'meditations', 'rewards', 'goals', 'fitnessExercises', 'fitnessDays']);
       }
     }
 

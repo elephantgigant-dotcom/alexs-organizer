@@ -12,6 +12,8 @@ export const DEFAULT_NOTIFICATIONS = {
   weeklyReview: { on: true, time: '19:00' }, // Sundays
   taskDue: { on: true, leadMin: 15 }, // before a task's time
   meditationEnd: { on: true }, // a session ended while the app was closed
+  fitnessSessions: { on: true }, // fitness challenge: session reminders and nags (times in Fitness settings)
+  fitnessSummary: { on: true }, // fitness challenge: the day's summary at the end of the window
   quietHours: { on: true, start: '23:00', end: '07:00' }, // sleep hours: nothing is sent
 }
 
@@ -23,6 +25,8 @@ export const REMINDER_TYPES = [
   { key: 'weeklyReview', label: 'Weekly review (Sundays)', hasTime: true },
   { key: 'taskDue', label: 'Task due', hint: 'before tasks that have a time' },
   { key: 'meditationEnd', label: 'Meditation finished', hint: 'when it ends while the app is closed' },
+  { key: 'fitnessSessions', label: 'Fitness sessions', hint: 'reminders and nags; times in Fitness challenge' },
+  { key: 'fitnessSummary', label: 'Fitness day summary', hint: 'at the end of the day window' },
 ]
 
 export function notificationSettings(settings) {

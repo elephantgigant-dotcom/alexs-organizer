@@ -4,6 +4,8 @@ import { signOut } from 'firebase/auth'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useData } from '../../app/DataContext.jsx'
+import { counts } from '../../lib/fitness.js'
+import { useFitness } from '../fitness/FitnessContext.jsx'
 import { auth } from '../../firebase.js'
 import { updateSettings } from '../../services/users.js'
 import { Card, PageTitle, Row, Segmented } from '../../ui/basics.jsx'
@@ -33,6 +35,8 @@ export function MorePage() {
         <Row icon="edit" title="Journal" sub="Past check-ins, edit or fill in" onClick={() => navigate('/journal')} />
         <div className="mx-4 border-t border-line" />
         <Row icon="star" title="Stars, meditation, sleep" sub={`Meditation ${settings.meditation.morningMin}/${settings.meditation.eveningMin} min · sleep target ${Math.floor(settings.sleep.targetMin / 60)} h ${settings.sleep.targetMin % 60} min`} onClick={() => navigate('/more/values')} />
+        <div className="mx-4 border-t border-line" />
+        <FitnessRow />
         <div className="mx-4 border-t border-line" />
         <Row icon="download" title="Export" sub="JSON for Claude, CSV for spreadsheets" onClick={() => navigate('/more/export')} />
         <div className="mx-4 border-t border-line" />
@@ -88,4 +92,11 @@ function InstallRow() {
       />
     </Card>
   )
+}
+
+function FitnessRow() {
+  const navigate = useNavigate()
+  const { f, challengeDay, day, today } = useFitness()
+  const sub = challengeDay ? `Day ${challengeDay}/${f.lengthDays} · ${counts(day).done}/${f.sessionsPerDay} today` : today < f.startDate ? `Starts ${f.startDate.slice(8)}.${f.startDate.slice(5, 7)} · exercises and settings` : 'Finished · month and exercises'
+  return <Row icon="stats" title="Fitness challenge" sub={sub} onClick={() => navigate('/more/fitness')} />
 }

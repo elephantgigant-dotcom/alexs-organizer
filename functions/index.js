@@ -5,6 +5,7 @@
 //    meditation, weekly review (Sundays), task due, "meditation finished" while the app is closed.
 //    Rules in shared/reminders.js (the app's own file). Every decision is logged once:
 //    sent · switched off · quiet hours · already done · no device registered · expired token deleted
+//    + the fitness challenge (fitness.js): session reminders, nags, missed, day summary, 8/8 stars
 //  • weeklyBackup (Monday 00:30 Warsaw): compact summary of the past week → weeklySummaries
 //  • onPushTest: "Send a test notification" from the app (ignores sleep hours)
 // Devices (push tokens) are in users/{uid}/devices.
@@ -18,6 +19,7 @@ import { onDocumentCreated } from 'firebase-functions/v2/firestore'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { addDaysKey, todayKey } from './shared/dates.js'
 import { dailyReminders, meditationEndReminders, MESSAGES, notificationSettings, taskReminders, WINDOW_MIN } from './shared/reminders.js'
+import { runFitness } from './fitness.js'
 import { previousWeek, weeklySummary } from './summary.js'
 
 // Our database: the named one in europe-central2 (Warsaw), same id as in the app and firebase.json
@@ -35,7 +37,7 @@ function log(entry) {
 
 // ── Sending ── → { result, sent, devices }
 
-export async function sendTo(uid, { title, body, url = '/', tag }) {
+export async function sendTo(uid, { title, body, url = '/', tag, extra = {} }) {
   const devices = await db.collection(`users/${uid}/devices`).get()
   const tokens = devices.docs.map((d) => d.data().token).filter(Boolean)
   if (!tokens.length) return { result: 'no device registered', sent: 0, devices: 0, errors: [] }
@@ -43,7 +45,7 @@ export async function sendTo(uid, { title, body, url = '/', tag }) {
   // Data-only message: our service worker (public/sw.js) shows it.
   const res = await getMessaging().sendEachForMulticast({
     tokens,
-    data: { title, body, url, tag: tag || 'organizer' },
+    data: { title, body, url, tag: tag || 'organizer', ...extra },
     webpush: { headers: { Urgency: 'high', TTL: '3600' } },
   })
 
@@ -134,6 +136,13 @@ export const reminders = onSchedule({ schedule: 'every 1 minutes', timeZone: 'Eu
       log({ uid, type: 'taskDue', task: r.task.id, ...res })
     }
 
+    // Fitness challenge (its own try, so a problem there never stops the other reminders)
+    try {
+      await runFitness({ db, FieldValue, userDoc: user, now, send: sendTo, log })
+    } catch (e) {
+      console.error(JSON.stringify({ event: 'reminder', uid, type: 'fitness', result: 'error', message: e.message }))
+    }
+
     // A meditation that ended while the app was closed
     const running = await user.ref.collection('meditations').where('status', '==', 'running').get()
     const sessions = running.docs.map((d) => ({ id: d.id, ref: d.ref, ...d.data() }))
@@ -179,9 +188,18 @@ export const weeklyBackup = onSchedule({ schedule: '30 0 * * 1', timeZone: 'Euro
 // 🔧 "Send a test notification" from Settings (ignores sleep hours). The answer is written
 // back into the same document, so the app can show exactly what happened.
 export const onPushTest = onDocumentCreated({ document: 'users/{uid}/pushTests/{id}', database: DATABASE_ID }, async (event) => {
+  const kind = event.data.data().kind
   let res
   try {
-    res = await sendTo(event.params.uid, { title: 'Test notification', body: 'It works! Reminders will arrive on this device.', tag: 'test' })
+    res =
+      kind === 'fitness'
+        ? await sendTo(event.params.uid, {
+            title: 'Session 1/8 (test)',
+            body: 'Tap Done on this notification to check that it works without opening the app.',
+            tag: 'fitness-test',
+            extra: { kind: 'fitness-test', testId: event.params.id, actions: 'done' },
+          })
+        : await sendTo(event.params.uid, { title: 'Test notification', body: 'It works! Reminders will arrive on this device.', tag: 'test' })
   } catch (e) {
     res = { result: 'send error', sent: 0, devices: 0, errors: [{ code: e.code || 'error', message: e.message }] }
   }

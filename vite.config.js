@@ -3,6 +3,7 @@ import path from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { DATABASE_ID, firebaseConfig } from './src/firebase-config.js'
 
 // Vite builds the app. React = UI library, Tailwind = styling.
 // A small build stamp shown in Settings, so we can tell which version a phone has
@@ -33,10 +34,19 @@ function precacheServiceWorker() {
       walk(outDir)
       const list = files.filter((f) => f !== '/sw.js' && !f.endsWith('.map')).sort()
       const version = Date.now().toString(36)
+      // The service worker's Done button writes to the database itself (same values as src/firebase.js)
+      const emulators = process.env.VITE_USE_EMULATORS === 'true'
+      const firebase = {
+        apiKey: emulators ? 'demo-key' : firebaseConfig.apiKey,
+        projectId: emulators ? 'demo-alexs-organizer' : firebaseConfig.projectId,
+        databaseId: DATABASE_ID,
+        emulators,
+      }
       const text = fs
         .readFileSync(sw, 'utf8')
         .replace('__SW_VERSION__', version)
         .replace('[] /* __SW_PRECACHE__ */', JSON.stringify(list))
+        .replace('null /* __SW_FIREBASE__ */', JSON.stringify(firebase))
       fs.writeFileSync(sw, text)
     },
   }
