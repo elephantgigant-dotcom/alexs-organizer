@@ -6,7 +6,7 @@
 // The app only records what I do: amounts, Done, Skip, an early session. All writes are
 // merges, so they also work offline and a double tap writes the same thing twice.
 
-import { collection, deleteField, doc, FieldPath, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore'
+import { collection, deleteField, doc, FieldPath, getDoc, getDocFromServer, getDocs, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase.js'
 import { todayKey } from '../lib/dates.js'
 import { DEFAULT_EXERCISES, dailySnapshot, pendingSession, sessionList, sessionSnapshot } from '../lib/fitness.js'
@@ -149,7 +149,8 @@ export async function sendFitnessTest(uid, onChange) {
 // The notification's Done button couldn't write by itself and opened /?fitnessDone=date:n.
 // Same as the button: done, every amount at least its target. → the session's status before
 export async function completeFromNotification(uid, date, n, now = Date.now()) {
-  const snap = await getDoc(dayRef(uid, date))
+  // The server's copy (the session was just created there); the device's copy only when offline
+  const snap = await getDocFromServer(dayRef(uid, date)).catch(() => getDoc(dayRef(uid, date)))
   const session = snap.data()?.sessions?.[n]
   if (!session) return 'missing'
   if (session.status !== 'pending') return session.status
