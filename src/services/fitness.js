@@ -6,7 +6,7 @@
 // The app only records what I do: amounts, Done, Skip, an early session. All writes are
 // merges, so they also work offline and a double tap writes the same thing twice.
 
-import { collection, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, where, writeBatch } from 'firebase/firestore'
+import { collection, deleteField, doc, FieldPath, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase.js'
 import { todayKey } from '../lib/dates.js'
 import { DEFAULT_EXERCISES, dailySnapshot, pendingSession, sessionList, sessionSnapshot } from '../lib/fitness.js'
@@ -102,6 +102,23 @@ export function startSessionNow(uid, day, exercises, now = Date.now()) {
   return write(uid, day.date, {
     sessions: { [n]: { n, status: 'pending', source: 'manual', scheduledAt: now, pushes: 0, lastPushAt: null, completedAt: null, missedAt: null, exercises: sessionSnapshot(exercises, day.date) } },
   })
+}
+
+// Correct a session afterwards (e.g. Skip tapped by mistake): done fills every amount up to its
+// target. The session keeps its own time (completed / reminder time), so the schedule of the next
+// sessions doesn't move.
+export function setSessionStatus(uid, date, session, status, now = Date.now()) {
+  closeNotification(date)
+  const when = session.status === 'pending' ? now : (session.completedAt ?? session.scheduledAt ?? now)
+  const patch = { status, completedAt: when }
+  if (status === 'done') patch.exercises = Object.fromEntries(Object.entries(session.exercises || {}).map(([id, e]) => [id, { done: Math.max(e.done || 0, e.target || 0) }]))
+  return write(uid, date, { sessions: { [session.n]: patch } })
+}
+
+// Undo "Do it now": remove the early session I started myself (the countdown comes back)
+export function cancelEarlySession(uid, date, session) {
+  if (session.source !== 'manual' || session.status !== 'pending') return null
+  return updateDoc(dayRef(uid, date), new FieldPath('sessions', String(session.n)), deleteField())
 }
 
 export function setDailyAmount(uid, day, exercises, id, value) {

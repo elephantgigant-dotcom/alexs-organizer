@@ -186,3 +186,16 @@ describe('streaks (only 8/8 days count)', () => {
     expect(fitnessStreaks({ ...days, '2026-10-31': part }, F, '2026-11-01')).toEqual({ current: 0, best: 3 })
   })
 })
+
+describe('corrections after the evening summary', () => {
+  it('a session changed to done later still completes the day and pays the stars once', () => {
+    const date = '2026-10-26'
+    const sessions = Object.fromEntries(Array.from({ length: 8 }, (_, i) => [String(i + 1), { n: i + 1, status: i === 7 ? 'skipped' : 'done', completedAt: at(date, '10:00'), scheduledAt: at(date, '10:00') }]))
+    const summarized = { date, sessions, result: { done: 7, skipped: 1, missed: 0, sessions: 8 }, summarySentAt: at(date, '21:00') }
+    expect(fitnessTick(summarized, F, at(date, '21:30')).payStars).toBe(false)
+    const fixed = { ...summarized, sessions: { ...sessions, 8: { ...sessions[8], status: 'done' } } }
+    const r = fitnessTick(fixed, F, at(date, '21:31'))
+    expect(r).toMatchObject({ payStars: true, pushes: [], updates: {} })
+    expect(fitnessTick({ ...fixed, starsPaid: true }, F, at(date, '21:32')).payStars).toBe(false)
+  })
+})

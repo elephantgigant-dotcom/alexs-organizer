@@ -198,7 +198,12 @@ export function isComplete(day, f) {
 // that is what makes the schedule idempotent.
 export function fitnessTick(day, f, now, exercises = null) {
   const out = { updates: {}, pushes: [], payStars: false, needsExercises: false }
-  if (!day?.date || day.result) return out
+  if (!day?.date) return out
+  // After the summary only a later correction (a session changed to done) can still pay the stars
+  if (day.result) {
+    out.payStars = isComplete(day, f) && !day.starsPaid
+    return out
+  }
   const end = atTime(day.date, f.endTime)
   const sessions = Object.fromEntries(sessionList(day).map((s) => [String(s.n), { ...s }]))
   const set = (n, patch) => {

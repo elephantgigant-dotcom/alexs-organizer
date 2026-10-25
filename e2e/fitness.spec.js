@@ -91,6 +91,21 @@ test('fitness: settings, Today card counters, Edit target, Done → countdown, F
   await expect(card.getByText(/1\/8/)).toBeVisible()
   await expect.poll(() => sessionStatus(page, uid, 1)).toEqual({ status: 'done', done: { pushups: 10, situps: 4, water: 1 } })
 
+  // Tap a block to correct a session: done → skipped → done again
+  await card.getByRole('button', { name: 'Session 1: done. Edit' }).click()
+  await page.getByRole('button', { name: 'Mark skipped' }).click()
+  await expect.poll(async () => (await sessionStatus(page, uid, 1)).status).toBe('skipped')
+  await card.getByRole('button', { name: 'Session 1: skipped. Edit' }).click()
+  await page.getByRole('button', { name: 'Mark done' }).click()
+  await expect.poll(() => sessionStatus(page, uid, 1)).toEqual({ status: 'done', done: { pushups: 10, situps: 4, water: 1 } })
+
+  // "Do it now" can be undone: the countdown comes back
+  await card.getByRole('button', { name: 'Do it now' }).click()
+  await expect(card.getByText('Session 2/8')).toBeVisible()
+  await card.getByRole('button', { name: 'Undo "Do it now"' }).click()
+  await expect(card.getByText(/Next session 2\/8 at/)).toBeVisible()
+  await expect.poll(() => sessionStatus(page, uid, 2)).toBeNull()
+
   // The Fitness page: today in the month grid, totals
   await page.goto('/more/fitness')
   await expect(page.getByText('Challenge day')).toBeVisible()

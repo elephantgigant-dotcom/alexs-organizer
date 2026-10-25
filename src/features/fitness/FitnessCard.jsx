@@ -8,12 +8,13 @@ import { Link } from 'react-router'
 import { useData } from '../../app/DataContext.jsx'
 import { formatShortDate, warsawParts } from '../../lib/dates.js'
 import { counts, isComplete, nextSessionAt, ordered, pendingSession, sessionReady, targetOn, unitLabel } from '../../lib/fitness.js'
-import { completeSession, setDailyAmount, setSessionAmount, skipSession, startSessionNow } from '../../services/fitness.js'
+import { cancelEarlySession, completeSession, setDailyAmount, setSessionAmount, skipSession, startSessionNow } from '../../services/fitness.js'
 import { Button } from '../../ui/basics.jsx'
 import { useCelebrate } from '../../ui/Celebrate.jsx'
 import { Icon } from '../../ui/Icons.jsx'
 import { useNow } from '../meditation/timerState.js'
 import { useFitness } from './FitnessContext.jsx'
+import { SessionSheet } from './SessionSheet.jsx'
 
 const clock = (ms) => warsawParts(new Date(ms)).time
 const round = (v) => Math.round(v * 100) / 100
@@ -24,6 +25,7 @@ export function FitnessCard() {
   const { celebrate, toast } = useCelebrate()
   const now = useNow(1000)
   const [busy, setBusy] = useState(false)
+  const [editing, setEditing] = useState(null) // session number
   if (!loaded) return null
 
   if (!challengeDay) {
@@ -69,7 +71,8 @@ export function FitnessCard() {
           Day {challengeDay}/{f.lengthDays} · <strong className="text-ink">{c.done}/{f.sessionsPerDay}</strong> today
         </span>
       </div>
-      <Dots day={day} f={f} />
+      <Dots day={day} f={f} onOpen={setEditing} />
+      {c.started > 0 && <span className="-mt-2 text-xs text-muted">Tap a block to change a session.</span>}
 
       {open ? (
         <>
@@ -95,6 +98,11 @@ export function FitnessCard() {
               Skip
             </Button>
           </div>
+          {open.source === 'manual' && (
+            <Button variant="ghost" size="sm" className="self-start" onClick={() => cancelEarlySession(uid, today, open)}>
+              Undo "Do it now"
+            </Button>
+          )}
         </>
       ) : over ? (
         <div className="flex items-center gap-3 rounded-[16px] bg-accent-soft p-3.5" role="status">
@@ -113,12 +121,14 @@ export function FitnessCard() {
       )}
 
       <DailyRows />
+      {editing && <SessionSheet n={editing} onClose={() => setEditing(null)} />}
     </section>
   )
 }
 
-// 8 small segments: done / skipped / missed / open / to come, each with a text alternative
-function Dots({ day, f }) {
+// 8 small segments: done / skipped / missed / open / to come, each with a text alternative.
+// A started session is a button: tap it to correct it.
+function Dots({ day, f, onOpen }) {
   const byN = Object.fromEntries(Object.values(day.sessions || {}).map((s) => [s.n, s.status]))
   const label = { done: 'done', skipped: 'skipped', missed: 'missed', pending: 'now' }
   return (
@@ -126,13 +136,23 @@ function Dots({ day, f }) {
       {Array.from({ length: f.sessionsPerDay }, (_, i) => {
         const st = byN[i + 1]
         const cls = st === 'done' ? 'bg-accent' : st === 'pending' ? 'bg-accent-soft ring-2 ring-accent' : st === 'skipped' || st === 'missed' ? 'bg-line' : 'bg-surface-2'
-        return <span key={i} className={`h-2 rounded-full ${cls}`} title={`Session ${i + 1}: ${label[st] || 'to come'}`} aria-label={`Session ${i + 1}: ${label[st] || 'to come'}`} />
+        const name = `Session ${i + 1}: ${label[st] || 'to come'}`
+        // The bar stays thin; the button around it is a full-size touch target
+        return st ? (
+          <button key={i} type="button" aria-label={`${name}. Edit`} title={name} onClick={() => onOpen(i + 1)} className="flex h-8 items-center">
+            <span className={`h-2 w-full rounded-full ${cls}`} />
+          </button>
+        ) : (
+          <span key={i} className="flex h-8 items-center" title={name} aria-label={name}>
+            <span className={`h-2 w-full rounded-full ${cls}`} />
+          </span>
+        )
       })}
     </div>
   )
 }
 
-function CounterRow({ x, step, onSet, onEdit }) {
+export function CounterRow({ x, step, onSet, onEdit }) {
   const reached = (x.done ?? 0) >= x.target
   const unit = unitLabel(x, x.target)
   return (

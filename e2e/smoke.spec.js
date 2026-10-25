@@ -23,9 +23,16 @@ test('the main flow works', async ({ page }) => {
   await expect(page.getByLabel('3 stars')).toBeVisible()
   await expect(page.getByText('1 of 1 done')).toBeVisible()
 
-  // Week view shows today's (done) and tomorrow's (new) copy
+  // Week view shows today's (done) and tomorrow's (new) copy; on a Sunday tomorrow is next week
   await page.getByRole('link', { name: 'Week' }).last().click()
-  await expect(page.getByText('Read 20 pages')).toHaveCount(2)
+  const sunday = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Warsaw', weekday: 'long' }).format(new Date()) === 'Sunday'
+  if (sunday) {
+    await expect(page.getByText('Read 20 pages')).toHaveCount(1)
+    await page.getByRole('button', { name: 'Next week' }).click()
+    await expect(page.getByText('Read 20 pages')).toHaveCount(1)
+  } else {
+    await expect(page.getByText('Read 20 pages')).toHaveCount(2)
+  }
 
   // Dark theme from Settings
   await page.getByRole('link', { name: 'More' }).last().click()
